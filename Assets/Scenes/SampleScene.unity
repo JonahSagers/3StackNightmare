@@ -154,6 +154,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 55
   maxDistance: 1000
+  hoverOutlineColor: {r: 0.6, g: 0, b: 1, a: 1}
   selectedComponents: []
   onComponentSelected:
     m_PersistentCalls:
@@ -809,6 +810,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 0, g: 1, b: 0.2, a: 1}
   width: 0.04
+  visible: 1
 --- !u!1 &1841500941
 GameObject:
   m_ObjectHideFlags: 0
@@ -825,6 +827,7 @@ GameObject:
   - component: {fileID: 1841500947}
   - component: {fileID: 1841500948}
   - component: {fileID: 1841500949}
+  - component: {fileID: 1841500950}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1015,6 +1018,21 @@ MonoBehaviour:
   rippleColor: {r: 1, g: 0.55, b: 0.15, a: 1}
   rippleCount: 2
   cam: {fileID: 0}
+--- !u!114 &1841500950
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1841500941}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5510147772bc04429709a92df5c3ae7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Outline
+  color: {r: 1, g: 0, b: 0, a: 1}
+  width: 0.04
+  visible: 0
 --- !u!1 &1966940802
 GameObject:
   m_ObjectHideFlags: 0
@@ -1182,6 +1200,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 1, g: 0, b: 0, a: 1}
   width: 0.04
+  visible: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

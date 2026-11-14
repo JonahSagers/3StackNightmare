@@ -22,6 +22,12 @@ public class MouseHandler : MonoBehaviour
 
     public float maxDistance = 1000f;
 
+    [Tooltip("Outline color shown on the hovered object (objects need an Outline component).")]
+    public Color hoverOutlineColor = new Color(0.6f, 0f, 1f, 1f);
+
+    Outline hoveredOutline;
+    PauseToggle pauseToggle;
+
     [Header("Component Menu")]
     [Tooltip("Components currently selected via the menu. Click a segment to toggle it.")]
     public List<Component> selectedComponents = new List<Component>();
@@ -143,6 +149,7 @@ public class MouseHandler : MonoBehaviour
         if (cam == null || Mouse.current == null)
         {
             hovered = null;
+            UpdateHoverOutline();
             return;
         }
 
@@ -153,6 +160,15 @@ public class MouseHandler : MonoBehaviour
         hovered = Physics.Raycast(ray, out RaycastHit hit, maxDistance, hoverMask, QueryTriggerInteraction.Collide)
             ? hit.collider.gameObject
             : null;
+
+        UpdateHoverOutline();
+
+        // The component menu is only available while paused; unpausing closes it.
+        if (!IsGamePaused())
+        {
+            if (menuOpen) CloseMenu();
+            return;
+        }
 
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
@@ -181,6 +197,22 @@ public class MouseHandler : MonoBehaviour
             SendPrompt();
             CloseMenu();
         }
+    }
+
+    bool IsGamePaused()
+    {
+        if (pauseToggle == null) pauseToggle = FindAnyObjectByType<PauseToggle>();
+        return pauseToggle != null && pauseToggle.IsPaused;
+    }
+
+    // While paused, shows the purple outline on whatever is under the cursor and restores the previous object.
+    void UpdateHoverOutline()
+    {
+        Outline next = IsGamePaused() && hovered != null ? hovered.GetComponentInParent<Outline>() : null;
+        if (next == hoveredOutline) return;
+        if (hoveredOutline != null) hoveredOutline.Hide();
+        hoveredOutline = next;
+        if (hoveredOutline != null) hoveredOutline.Show(hoverOutlineColor);
     }
 
     void OpenMenu(GameObject target, Vector2 guiPos)
