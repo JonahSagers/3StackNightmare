@@ -88,6 +88,7 @@ public class Health : MonoBehaviour
 
         // Hide instead of destroying, so this script keeps running and can bring us back.
         SetVisible(false);
+        SetControlsEnabled(false); // e.g. a dead player can't walk or cast
         StartCoroutine(RespawnAfterDelay());
     }
 
@@ -99,7 +100,30 @@ public class Health : MonoBehaviour
         Current = maxHealth;
         lastHealTime = Time.time; // full health after respawn, then decay as usual
         SetVisible(true);
+        SetControlsEnabled(true);
         Debug.Log($"{name} respawned");
+    }
+
+    // Pauses this object's other scripts (movement, abilities, shooting) while dead.
+    readonly System.Collections.Generic.List<MonoBehaviour> pausedWhileDead = new System.Collections.Generic.List<MonoBehaviour>();
+
+    void SetControlsEnabled(bool on)
+    {
+        if (!on)
+        {
+            pausedWhileDead.Clear();
+            foreach (var mb in GetComponents<MonoBehaviour>())
+            {
+                if (mb == this || mb is HealthBar || mb is Outline || !mb.enabled) continue;
+                mb.enabled = false;
+                pausedWhileDead.Add(mb);
+            }
+        }
+        else
+        {
+            foreach (var mb in pausedWhileDead) if (mb != null) mb.enabled = true;
+            pausedWhileDead.Clear();
+        }
     }
 
     // Turns every renderer, collider and UI canvas on this object (and its children) on or off.
