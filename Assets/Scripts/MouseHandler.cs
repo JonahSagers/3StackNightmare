@@ -166,7 +166,14 @@ public class MouseHandler : MonoBehaviour
         }
 
         if (menuOpen && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
             CloseMenu();
+        }
+        if (menuOpen && Keyboard.current != null && prompt.Length > 0 && Keyboard.current.enterKey.wasPressedThisFrame)
+        {
+            SendPrompt();
+            CloseMenu();
+        }
     }
 
     void OpenMenu(GameObject target, Vector2 guiPos)
@@ -184,11 +191,17 @@ public class MouseHandler : MonoBehaviour
         focusPromptNext = true;
     }
 
+    void SendPrompt()
+    {
+        Debug.Log("Prompt: " + prompt);
+    }
+
     void CloseMenu()
     {
         menuOpen = false;
         menuTarget = null;
         pressedIndex = -1;
+        prompt = "";
     }
 
     Vector2 MenuSize()
