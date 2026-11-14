@@ -25,10 +25,12 @@ public class ClickToMove : MonoBehaviour
 
     Vector3 targetPosition;
     bool hasTarget;
+    AutoAttack autoAttack;
 
     void Start()
     {
         if (cam == null) cam = Camera.main;
+        autoAttack = GetComponent<AutoAttack>();
 
         if (ground == null)
         {
@@ -40,7 +42,15 @@ public class ClickToMove : MonoBehaviour
     void Update()
     {
         var mouse = Mouse.current;
-        if (mouse != null && mouse.rightButton.wasPressedThisFrame && TryGetClickPoint(mouse.position.ReadValue(), out Vector3 point))
+        bool rightClicked = mouse != null && mouse.rightButton.wasPressedThisFrame;
+
+        // Right-clicked an enemy? Let AutoAttack handle it (walk into range, then attack).
+        if (rightClicked && autoAttack != null && autoAttack.TryTargetUnderMouse(cam.ScreenPointToRay(mouse.position.ReadValue())))
+            rightClicked = false;
+        else if (rightClicked && autoAttack != null)
+            autoAttack.ClearTarget(); // clicked the ground: stop attacking and just walk
+
+        if (rightClicked && TryGetClickPoint(mouse.position.ReadValue(), out Vector3 point))
         {
             // Keep the player's own height so it doesn't sink into the floor.
             targetPosition = ClampToGround(new Vector3(point.x, transform.position.y, point.z));
@@ -64,6 +74,13 @@ public class ClickToMove : MonoBehaviour
 
     // Cancel the current walk (used by abilities like the leap so we don't keep walking afterward).
     public void Stop() => hasTarget = false;
+
+    // Walk toward a point (used by AutoAttack to chase a target into range).
+    public void MoveTo(Vector3 point)
+    {
+        targetPosition = ClampToGround(new Vector3(point.x, transform.position.y, point.z));
+        hasTarget = true;
+    }
 
     // Keeps a position inside the ground's area (X and Z only; height is left alone).
     public Vector3 ClampToGround(Vector3 pos)
