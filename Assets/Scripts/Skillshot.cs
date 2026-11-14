@@ -37,6 +37,9 @@ public class Skillshot : MonoBehaviour
 
     float nextReadyTime;
 
+    /// <summary>Time.time at which the ability can be used again (read by AbilityBar).</summary>
+    public float NextReadyTime => nextReadyTime;
+
     void Start()
     {
         if (cam == null) cam = Camera.main;

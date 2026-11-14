@@ -35,6 +35,9 @@ public class LeapSlam : MonoBehaviour
 
     ClickToMove mover;
     float nextReadyTime;
+
+    /// <summary>Time.time at which the ability can be used again (read by AbilityBar).</summary>
+    public float NextReadyTime => nextReadyTime;
     bool leaping;
 
     void Start()
