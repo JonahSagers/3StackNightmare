@@ -119,6 +119,86 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &146678096
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 146678098}
+  - component: {fileID: 146678097}
+  m_Layer: 0
+  m_Name: Prompt Handler
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &146678097
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 146678096}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d00a8cb4a98e443b2806d8b1911fbf80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MouseHandler
+  hovered: {fileID: 0}
+  cam: {fileID: 330585545}
+  hoverMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  maxDistance: 1000
+  selectedComponents: []
+  onComponentSelected:
+    m_PersistentCalls:
+      m_Calls: []
+  onComponentDeselected:
+    m_PersistentCalls:
+      m_Calls: []
+  logSelection: 1
+  layout: 0
+  segmentWidth: 170
+  segmentHeight: 40
+  cornerRadius: 18
+  squircleExponent: 4.5
+  cursorOffset: {x: 12, y: 12}
+  fontSize: 15
+  backgroundColor: {r: 0.11, g: 0.11, b: 0.13, a: 0.96}
+  hoverColor: {r: 0.22, g: 0.47, b: 0.96, a: 1}
+  pressedColor: {r: 0.16, g: 0.36, b: 0.8, a: 1}
+  selectedColor: {r: 0.2, g: 0.62, b: 0.42, a: 1}
+  selectedHoverColor: {r: 0.26, g: 0.72, b: 0.5, a: 1}
+  dividerColor: {r: 1, g: 1, b: 1, a: 0.08}
+  textColor: {r: 0.93, g: 0.93, b: 0.95, a: 1}
+  shadowColor: {r: 0, g: 0, b: 0, a: 0.35}
+  prompt: 
+  promptPlaceholder: Type a prompt...
+  promptHeight: 40
+  promptGap: 8
+  promptBackgroundColor: {r: 0.15, g: 0.15, b: 0.18, a: 0.96}
+  promptPlaceholderColor: {r: 1, g: 1, b: 1, a: 0.35}
+  piBridgeUrl: http://127.0.0.1:7777/prompt
+--- !u!4 &146678098
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 146678096}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1.90031, y: 0, z: -3.37915}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -722,3 +802,4 @@ SceneRoots:
   - {fileID: 832575519}
   - {fileID: 1841500945}
   - {fileID: 830047230}
+  - {fileID: 146678098}
