@@ -152,7 +152,7 @@ MonoBehaviour:
   cam: {fileID: 330585545}
   hoverMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 55
   maxDistance: 1000
   selectedComponents: []
   onComponentSelected:
@@ -492,7 +492,7 @@ GameObject:
   - component: {fileID: 830047229}
   - component: {fileID: 830047228}
   - component: {fileID: 830047227}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Ground
   m_TagString: Untagged
   m_Icon: {fileID: 0}
