@@ -149,7 +149,8 @@ public class MouseHandler : MonoBehaviour
         Vector2 mousePos = Mouse.current.position.ReadValue();
         Ray ray = cam.ScreenPointToRay(mousePos);
 
-        hovered = Physics.Raycast(ray, out RaycastHit hit, maxDistance, hoverMask, QueryTriggerInteraction.Ignore)
+        // Collide with triggers too: projectiles use trigger colliders.
+        hovered = Physics.Raycast(ray, out RaycastHit hit, maxDistance, hoverMask, QueryTriggerInteraction.Collide)
             ? hit.collider.gameObject
             : null;
 

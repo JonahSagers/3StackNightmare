@@ -494,7 +494,7 @@ GameObject:
   - component: {fileID: 830047227}
   m_Layer: 6
   m_Name: Ground
-  m_TagString: Untagged
+  m_TagString: Background
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -774,6 +774,8 @@ MonoBehaviour:
   turnSpeed: 720
   stopDistance: 0.1
   cam: {fileID: 0}
+  ground: {fileID: 0}
+  edgePadding: 0.5
 --- !u!114 &1841500947
 MonoBehaviour:
   m_ObjectHideFlags: 0
