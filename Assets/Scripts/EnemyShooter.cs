@@ -1,10 +1,10 @@
 using UnityEngine;
 
-// Attach to an enemy (your EnemyShooter). Turns to face the player and fires small projectiles at it.
-// Projectiles fly straight toward where the player WAS, so you can dodge them by moving.
+// Attach to an enemy (your EnemyShooter). Fires small projectiles straight ahead (the way the
+// shooter is facing, its blue Z arrow) on a timer. It doesn't aim; rotate the shooter to change direction.
 public class EnemyShooter : MonoBehaviour
 {
-    [Tooltip("Who to shoot at. Defaults to the object named \"Player\".")]
+    [Tooltip("Always damaged by these shots, whatever its team. Defaults to the object named \"Player\".")]
     public Transform target;
 
     public float damage = 15f;
@@ -12,8 +12,11 @@ public class EnemyShooter : MonoBehaviour
     [Tooltip("Seconds between shots.")]
     public float fireInterval = 0.5f;
 
-    [Tooltip("Only shoots when the target is this close.")]
+    [Tooltip("How far each shot travels before disappearing.")]
     public float range = 15f;
+
+    [Tooltip("Only fire while the player is within Range. Off = fire nonstop.")]
+    public bool onlyWhenPlayerInRange = false;
 
     [Header("Projectile")]
     public float projectileSpeed = 12f;
@@ -36,21 +39,19 @@ public class EnemyShooter : MonoBehaviour
 
     void Update()
     {
-        if (target == null) return;
-
-        // Don't shoot at a dead (hidden) player.
-        Health targetHealth = target.GetComponent<Health>();
-        if (targetHealth != null && targetHealth.IsDead) return;
-
-        Vector3 toTarget = target.position - transform.position;
-        toTarget.y = 0f;
-        if (toTarget.magnitude > range) return;
-
-        transform.rotation = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
+        if (onlyWhenPlayerInRange)
+        {
+            if (target == null) return;
+            Health targetHealth = target.GetComponent<Health>();
+            if (targetHealth != null && targetHealth.IsDead) return;
+            if (Vector3.Distance(target.position, transform.position) > range) return;
+        }
 
         if (Time.time >= nextShotTime)
         {
-            Shoot(toTarget.normalized);
+            Vector3 forward = transform.forward;
+            forward.y = 0f; // keep shots level even if the shooter is tilted
+            Shoot(forward.sqrMagnitude > 0.001f ? forward.normalized : Vector3.forward);
             nextShotTime = Time.time + fireInterval;
         }
     }
@@ -70,6 +71,6 @@ public class EnemyShooter : MonoBehaviour
     void OnDrawGizmosSelected()
     {
         Gizmos.color = new Color(1f, 0.25f, 0.1f, 0.5f);
-        Gizmos.DrawWireSphere(transform.position, range);
+        Gizmos.DrawLine(transform.position, transform.position + transform.forward * range); // firing line
     }
 }

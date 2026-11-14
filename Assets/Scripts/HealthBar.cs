@@ -14,9 +14,14 @@ public class HealthBar : MonoBehaviour
     public Color fillColor = new Color(0.85f, 0.1f, 0.1f);
     public Color backgroundColor = new Color(0f, 0f, 0f, 0.7f);
 
+    [Tooltip("Thin bar above the health bar, only visible while a shield is up.")]
+    public Color shieldColor = new Color(0.85f, 0.95f, 1f);
+
     Health health;
     Transform bar;
     RectTransform fill;
+    RectTransform shieldBack;
+    RectTransform shieldFill;
     Camera cam;
 
     void Start()
@@ -45,6 +50,23 @@ public class HealthBar : MonoBehaviour
         fill = CreateImage("Fill", canvasGO.transform, fillColor);
         fill.offsetMin = new Vector2(4f, 4f);   // small inner border
         fill.offsetMax = new Vector2(-4f, -4f);
+
+        // Shield bar: a thinner strip sitting just above the health bar.
+        shieldBack = CreateImage("ShieldBackground", canvasGO.transform, backgroundColor);
+        PlaceAboveBar(shieldBack);
+        shieldFill = CreateImage("ShieldFill", shieldBack, shieldColor);
+        shieldFill.offsetMin = new Vector2(3f, 2f);
+        shieldFill.offsetMax = new Vector2(-3f, -2f);
+        shieldBack.gameObject.SetActive(false);
+    }
+
+    void PlaceAboveBar(RectTransform rect)
+    {
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(0.5f, 0f);
+        rect.sizeDelta = new Vector2(0f, size.y * 100f * 0.6f); // 60% as tall as the health bar
+        rect.anchoredPosition = new Vector2(0f, 3f);             // small gap above it
     }
 
     RectTransform CreateImage(string name, Transform parent, Color color)
@@ -66,6 +88,11 @@ public class HealthBar : MonoBehaviour
 
         // Shrink the fill from right to left.
         fill.anchorMax = new Vector2(health.Fraction, 1f);
+
+        // Show the shield strip only while there's a shield, shrinking as it's used up.
+        bool shielded = health.Shield > 0f;
+        if (shieldBack.gameObject.activeSelf != shielded) shieldBack.gameObject.SetActive(shielded);
+        if (shielded) shieldFill.anchorMax = new Vector2(health.ShieldFraction, 1f);
 
         // Stay upright and face the same way as the camera so it's always readable.
         if (cam != null) bar.rotation = cam.transform.rotation;

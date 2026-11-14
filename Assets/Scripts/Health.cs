@@ -36,6 +36,12 @@ public class Health : MonoBehaviour
     public float Fraction => maxHealth <= 0f ? 0f : Current / maxHealth;
     public bool IsDead => Current <= 0f;
 
+    // Shield: absorbs damage before health does, then runs out or expires.
+    public float Shield { get; private set; }
+    public float ShieldFraction => shieldStart <= 0f ? 0f : Shield / shieldStart;
+    float shieldStart;
+    float shieldExpireTime;
+
     float lastHealTime;
     Vector3 spawnPosition;
     Quaternion spawnRotation;
@@ -49,6 +55,8 @@ public class Health : MonoBehaviour
 
     void Update()
     {
+        if (Shield > 0f && Time.time >= shieldExpireTime) ClearShield();
+
         if (team != Team.Ally || !decayToStartingHealth || IsDead) return; // only friendlies decay
         if (Current <= startingHealth) return;                 // nothing to drain
         if (Time.time - lastHealTime < decayDelaySeconds) return;     // still in the pause after a heal
@@ -61,10 +69,34 @@ public class Health : MonoBehaviour
     {
         if (IsDead) return;
 
+        // The shield soaks up damage first; only the leftover reaches health.
+        if (Shield > 0f)
+        {
+            float absorbed = Mathf.Min(Shield, amount);
+            Shield -= absorbed;
+            amount -= absorbed;
+            if (Shield <= 0f) ClearShield();
+            if (amount <= 0f) { Debug.Log($"{name}'s shield absorbed {absorbed} ({Shield} shield left)"); return; }
+        }
+
         Current = Mathf.Max(0f, Current - amount);
         Debug.Log($"{name} took {amount} damage ({Current}/{maxHealth})");
 
         if (IsDead) Die();
+    }
+
+    // Gives a temporary shield. Casting again replaces the old one.
+    public void AddShield(float amount, float duration)
+    {
+        if (IsDead) return;
+        Shield = shieldStart = amount;
+        shieldExpireTime = Time.time + duration;
+    }
+
+    public void ClearShield()
+    {
+        Shield = 0f;
+        shieldStart = 0f;
     }
 
     public void Heal(float amount)
@@ -79,6 +111,7 @@ public class Health : MonoBehaviour
     void Die()
     {
         Debug.Log($"{name} died");
+        ClearShield();
 
         if (!respawn)
         {
