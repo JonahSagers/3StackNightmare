@@ -161,6 +161,10 @@ public class MouseHandler : MonoBehaviour
             if (menuOpen && PanelRect().Contains(guiMouse))
                 return;
 
+            // Clicks on the pi output column shouldn't select scene objects behind it.
+            if (PiOutputPanel.IsPointerOver(guiMouse))
+                return;
+
             if (hovered != null)
                 OpenMenu(hovered, guiMouse);
             else
@@ -239,7 +243,11 @@ public class MouseHandler : MonoBehaviour
             yield return req.SendWebRequest();
 
             if (req.result == UnityWebRequest.Result.Success)
+            {
                 Debug.Log("[MouseHandler] Prompt sent to pi");
+                // Stream pi's reply into the left-quarter output column.
+                PiOutputPanel.Show(gameObject, PiOutputPanel.ParseSeq(req.downloadHandler.text));
+            }
             else
                 Debug.LogWarning($"[MouseHandler] Could not reach pi at {piBridgeUrl}: {req.error}. " +
                                  "Is pi running with the unity-bridge extension loaded (/reload)?");
@@ -465,7 +473,7 @@ public class MouseHandler : MonoBehaviour
     }
 
     /// <summary>Cached white anti-aliased squircle (superellipse-cornered rect) mask texture.</summary>
-    class SquircleMask
+    internal class SquircleMask
     {
         public Texture2D Texture { get; private set; }
         Vector2Int size;
