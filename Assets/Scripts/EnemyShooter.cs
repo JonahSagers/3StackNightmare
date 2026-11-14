@@ -15,6 +15,9 @@ public class EnemyShooter : MonoBehaviour
     [Tooltip("How far each shot travels before disappearing.")]
     public float range = 15f;
 
+    [Tooltip("Turns the firing direction around the shooter, in degrees. 0 = straight ahead (blue Z arrow), 180 = backward.")]
+    public float fireAngle = 180f;
+
     [Tooltip("Only fire while the player is within Range. Off = fire nonstop.")]
     public bool onlyWhenPlayerInRange = false;
 
@@ -49,11 +52,17 @@ public class EnemyShooter : MonoBehaviour
 
         if (Time.time >= nextShotTime)
         {
-            Vector3 forward = transform.forward;
-            forward.y = 0f; // keep shots level even if the shooter is tilted
-            Shoot(forward.sqrMagnitude > 0.001f ? forward.normalized : Vector3.forward);
+            Vector3 dir = FireDirection();
+            Shoot(dir);
             nextShotTime = Time.time + fireInterval;
         }
+    }
+
+    Vector3 FireDirection()
+    {
+        Vector3 dir = Quaternion.AngleAxis(fireAngle, Vector3.up) * transform.forward;
+        dir.y = 0f; // keep shots level even if the shooter is tilted
+        return dir.sqrMagnitude > 0.001f ? dir.normalized : Vector3.forward;
     }
 
     void Shoot(Vector3 direction)
@@ -71,6 +80,6 @@ public class EnemyShooter : MonoBehaviour
     void OnDrawGizmosSelected()
     {
         Gizmos.color = new Color(1f, 0.25f, 0.1f, 0.5f);
-        Gizmos.DrawLine(transform.position, transform.position + transform.forward * range); // firing line
+        Gizmos.DrawLine(transform.position, transform.position + FireDirection() * range); // firing line
     }
 }
