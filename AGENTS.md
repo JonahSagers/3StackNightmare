@@ -27,6 +27,13 @@ Hot Reload only patches code. Changes to GameObjects, components, or serialized 
 - Hot Reload must be running (Window → Hot Reload → Start) before entering Play mode.
 - No debugger attached unless Hot Reload's debugger compatibility is enabled.
 
+## MCP commands that time out
+- **`Unity_RunCommand`**: times out (60s client limit) in Play mode once a `.cs` file has changed since entering Play mode (even a trivial `result.Log("hi")` hangs). Cause: the tool always calls `AssetDatabase.Refresh()` and then waits up to 120s for `!EditorApplication.isCompiling && !isUpdating` (`EditorReadyHelper.RefreshAndWaitForReady`). With "Recompile After Finished Playing", the recompile is deferred, so Unity reports compiling for the rest of the session. The server later logs `COMPILATION_IN_PROGRESS`, but only after the client has already timed out. No workaround found from MCP. Have the user exit Play mode (or don't edit scripts mid-play if RunCommand is still needed), then it works again. Retrying doesn't help. Other tools (`GetConsoleLogs`, `Capture2DScene`, `AssetGeneration_GetModels`) still respond in under 1s while this happens.
+
+## Other MCP tool notes (not timeouts)
+- `Unity_Camera_Capture` (with no camera ID) and `Unity_SceneView_CaptureMultiAngleSceneView` fail right away if no Scene View window is open. Pass a `cameraInstanceID` to `Camera_Capture`, or ask the user to open a Scene View.
+- `Unity_AssetGeneration_GetModels` returns an empty list, and the console shows `NoSubscription`. That means `Unity_AssetGeneration_GenerateAsset` has no models to use. It also requires asking the user for consent once per conversation before the first call.
+
 ## MCP sandbox limits
 - `System.Reflection` is not allowed in `Unity_RunCommand` scripts.
 - APIs that show dialogs (e.g. `result.DestroyObject`, `AssetDatabase.DeleteAsset` in some cases) fail with "User interactions are not supported" — use `Undo.DestroyObjectImmediate` for objects and delete files via bash.
