@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// Added automatically by SkillshotQ. Flies in a straight line, then disappears at max range.
+// Added automatically by Skillshot. Flies in a straight line, then disappears at max range.
 public class SkillshotProjectile : MonoBehaviour
 {
     Vector3 direction;
@@ -8,11 +8,13 @@ public class SkillshotProjectile : MonoBehaviour
     float range;
     float travelled;
     GameObject owner;
-    float damage;
+    float amount;
+    SkillEffect effect;
 
-    public void Launch(Vector3 dir, float spd, float maxRange, GameObject caster, float dmg = 25f)
+    public void Launch(Vector3 dir, float spd, float maxRange, GameObject caster, float amt, SkillEffect fx)
     {
-        damage = dmg;
+        amount = amt;
+        effect = fx;
         direction = dir;
         speed = spd;
         range = maxRange;
@@ -32,11 +34,18 @@ public class SkillshotProjectile : MonoBehaviour
     {
         if (owner != null && other.transform.IsChildOf(owner.transform)) return; // don't hit yourself
         if (other.name == "Ground") return; // skim along the floor
-
-        Debug.Log($"Q hit {other.name}");
+        if (other.GetComponent<SkillshotProjectile>() != null) return; // orbs pass through each other
 
         Health health = other.GetComponentInParent<Health>();
-        if (health != null) health.TakeDamage(damage);
+        if (health != null)
+        {
+            // Damage only hurts enemies, heals only help allies. Wrong team? Fly straight through.
+            if (effect == SkillEffect.Damage && health.team == Team.Enemy) health.TakeDamage(amount);
+            else if (effect == SkillEffect.Heal && health.team == Team.Ally) health.Heal(amount);
+            else return;
+        }
+
+        Debug.Log($"{name} hit {other.name}");
 
         Destroy(gameObject);
     }

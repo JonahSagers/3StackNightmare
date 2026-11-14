@@ -62,8 +62,11 @@ public class ClickToMove : MonoBehaviour
         transform.rotation = Quaternion.RotateTowards(transform.rotation, look, turnSpeed * Time.deltaTime);
     }
 
+    // Cancel the current walk (used by abilities like the leap so we don't keep walking afterward).
+    public void Stop() => hasTarget = false;
+
     // Keeps a position inside the ground's area (X and Z only; height is left alone).
-    Vector3 ClampToGround(Vector3 pos)
+    public Vector3 ClampToGround(Vector3 pos)
     {
         if (ground == null) return pos;
 

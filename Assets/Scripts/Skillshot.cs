@@ -1,14 +1,25 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 
-// Attach to the Player. Press Q to fire a sphere toward the mouse cursor, League-style.
-public class SkillshotQ : MonoBehaviour
+public enum SkillEffect { Damage, Heal }
+
+// Attach to the Player, once per ability. Press the key to fire an orb toward the mouse cursor, League-style.
+// Damage orbs only hit Enemy-team targets; Heal orbs only hit Ally-team targets. Everything else they fly through.
+public class Skillshot : MonoBehaviour
 {
+    [Header("Ability")]
+    public Key key = Key.Q;
+    public SkillEffect effect = SkillEffect.Damage;
+
+    [Tooltip("Damage dealt, or health restored.")]
+    [FormerlySerializedAs("damage")]
+    public float amount = 25f;
+
     [Header("Projectile")]
     [Tooltip("Your Q_Projectile prefab. Leave empty to fall back to a plain sphere.")]
     public GameObject projectilePrefab;
 
-    public float damage = 25f;
     public float speed = 15f;
     public float range = 10f;
     public float size = 0.5f;
@@ -34,7 +45,7 @@ public class SkillshotQ : MonoBehaviour
     void Update()
     {
         var keyboard = Keyboard.current;
-        if (keyboard == null || !keyboard.qKey.wasPressedThisFrame) return;
+        if (keyboard == null || !keyboard[key].wasPressedThisFrame) return;
         if (Time.time < nextReadyTime) return;
 
         Vector3 direction = GetAimDirection();
@@ -67,13 +78,13 @@ public class SkillshotQ : MonoBehaviour
         if (projectilePrefab != null)
         {
             ball = Instantiate(projectilePrefab, spawnPos, spawnRot);
-            ball.name = "Q Skillshot";
+            ball.name = key + " Skillshot";
         }
         else
         {
             // No prefab assigned: plain tinted sphere, like before.
             ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            ball.name = "Q Skillshot";
+            ball.name = key + " Skillshot";
             ball.transform.SetPositionAndRotation(spawnPos, spawnRot);
             ball.transform.localScale = Vector3.one * size;
             ball.GetComponent<Renderer>().material.color = color;
@@ -92,7 +103,7 @@ public class SkillshotQ : MonoBehaviour
 
         SkillshotProjectile projectile = ball.GetComponent<SkillshotProjectile>();
         if (projectile == null) projectile = ball.AddComponent<SkillshotProjectile>();
-        projectile.Launch(direction, speed, range, gameObject, damage);
+        projectile.Launch(direction, speed, range, gameObject, amount, effect);
 
         // Face the shot direction too, like casting a spell.
         transform.rotation = spawnRot;

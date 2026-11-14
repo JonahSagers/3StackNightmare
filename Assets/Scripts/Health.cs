@@ -1,11 +1,29 @@
 using System.Collections;
 using UnityEngine;
 
-// Attach to anything that can take damage (your Enemy). Adds a floating health bar automatically.
+public enum Team { Ally, Enemy }
+
+// Attach to anything that can be damaged or healed. Adds a floating health bar automatically.
 [RequireComponent(typeof(HealthBar))]
 public class Health : MonoBehaviour
 {
+    [Tooltip("Ally: can be healed by W, ignored by Q. Enemy: damaged by Q, ignored by W.")]
+    public Team team = Team.Enemy;
+
     public float maxHealth = 100f;
+
+    [Tooltip("Health when the game starts. Respawning always restores full health.")]
+    public float startingHealth = 100f;
+
+    [Header("Decay")]
+    [Tooltip("Allies only: when health is above Starting Health, drain back down to it after a pause.")]
+    public bool decayToStartingHealth = true;
+
+    [Tooltip("Seconds after the last heal before draining starts.")]
+    public float decayDelaySeconds = 2f;
+
+    [Tooltip("Health lost per second while draining.")]
+    public float decayPerSecond = 15f;
 
     [Header("Death")]
     [Tooltip("Come back after dying instead of being destroyed.")]
@@ -18,14 +36,25 @@ public class Health : MonoBehaviour
     public float Fraction => maxHealth <= 0f ? 0f : Current / maxHealth;
     public bool IsDead => Current <= 0f;
 
+    float lastHealTime;
     Vector3 spawnPosition;
     Quaternion spawnRotation;
 
     void Awake()
     {
-        Current = maxHealth;
+        Current = Mathf.Clamp(startingHealth, 0f, maxHealth);
         spawnPosition = transform.position;   // remember where we started
         spawnRotation = transform.rotation;
+    }
+
+    void Update()
+    {
+        if (team != Team.Ally || !decayToStartingHealth || IsDead) return; // only friendlies decay
+        if (Current <= startingHealth) return;                 // nothing to drain
+        if (Time.time - lastHealTime < decayDelaySeconds) return;     // still in the pause after a heal
+
+        // Slide smoothly toward Starting Health, a little each frame.
+        Current = Mathf.MoveTowards(Current, startingHealth, decayPerSecond * Time.deltaTime);
     }
 
     public void TakeDamage(float amount)
@@ -36,6 +65,15 @@ public class Health : MonoBehaviour
         Debug.Log($"{name} took {amount} damage ({Current}/{maxHealth})");
 
         if (IsDead) Die();
+    }
+
+    public void Heal(float amount)
+    {
+        if (IsDead) return;
+
+        Current = Mathf.Min(maxHealth, Current + amount);
+        lastHealTime = Time.time; // restart the decay countdown
+        Debug.Log($"{name} healed {amount} ({Current}/{maxHealth})");
     }
 
     void Die()
@@ -59,6 +97,7 @@ public class Health : MonoBehaviour
 
         transform.SetPositionAndRotation(spawnPosition, spawnRotation);
         Current = maxHealth;
+        lastHealTime = Time.time; // full health after respawn, then decay as usual
         SetVisible(true);
         Debug.Log($"{name} respawned");
     }
