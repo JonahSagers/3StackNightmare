@@ -759,6 +759,56 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1222977598
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1222977593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30edd39488afd1e4b9fef6eeddeb48ec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Health
+  team: 0
+  maxHealth: 100
+  startingHealth: 25
+  decayToStartingHealth: 1
+  decayDelaySeconds: 2
+  decayPerSecond: 15
+  respawn: 1
+  respawnDelay: 3
+--- !u!114 &1222977599
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1222977593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dcd2394e342119a4593512bec5e676df, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HealthBar
+  heightOffset: 1.6
+  size: {x: 1.2, y: 0.15}
+  fillColor: {r: 0.15, g: 0.85, b: 0.25, a: 1}
+  backgroundColor: {r: 0, g: 0, b: 0, a: 0.7}
+--- !u!114 &1222977600
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1222977593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5510147772bc04429709a92df5c3ae7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Outline
+  color: {r: 0, g: 1, b: 0.2, a: 1}
+  width: 0.04
 --- !u!1 &1841500941
 GameObject:
   m_ObjectHideFlags: 0
@@ -774,6 +824,7 @@ GameObject:
   - component: {fileID: 1841500946}
   - component: {fileID: 1841500947}
   - component: {fileID: 1841500948}
+  - component: {fileID: 1841500949}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -908,14 +959,61 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Skillshot
   key: 31
   effect: 0
+  amount: 25
   projectilePrefab: {fileID: 5168104847546051517, guid: f53aea29f70b24c43a3e5d59243c7b3e, type: 3}
-  damage: 25
   speed: 15
   range: 10
   size: 0.5
   color: {r: 0.3, g: 0.7, b: 1, a: 1}
   cooldown: 1
   spawnHeight: 0
+  cam: {fileID: 0}
+--- !u!114 &1841500948
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1841500941}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e27f048fce293694893166cd63dd077e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Skillshot
+  key: 37
+  effect: 1
+  amount: 25
+  projectilePrefab: {fileID: 5168104847546051517, guid: 0112800032904a909dc16bf04ae0c059, type: 3}
+  speed: 15
+  range: 10
+  size: 0.5
+  color: {r: 0.2, g: 1, b: 0.3, a: 1}
+  cooldown: 1
+  spawnHeight: 0
+  cam: {fileID: 0}
+--- !u!114 &1841500949
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1841500941}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b33cd291a16df742954adb073c94efe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LeapSlam
+  key: 19
+  cooldown: 4
+  maxRange: 6
+  airTime: 0.45
+  arcHeight: 2
+  damage: 40
+  radius: 3
+  knockbackDistance: 3
+  knockbackDuration: 0.25
+  rippleColor: {r: 1, g: 0.55, b: 0.15, a: 1}
+  rippleCount: 2
   cam: {fileID: 0}
 --- !u!1 &1966940802
 GameObject:
@@ -1049,6 +1147,9 @@ MonoBehaviour:
   team: 1
   maxHealth: 100
   startingHealth: 100
+  decayToStartingHealth: 1
+  decayDelaySeconds: 2
+  decayPerSecond: 15
   respawn: 1
   respawnDelay: 3
 --- !u!114 &1966940808
@@ -1080,76 +1181,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 1, g: 0, b: 0, a: 1}
-  width: 0.04
---- !u!114 &1841500948
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1841500941}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e27f048fce293694893166cd63dd077e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Skillshot
-  key: 37
-  effect: 1
-  amount: 25
-  projectilePrefab: {fileID: 5168104847546051517, guid: 0112800032904a909dc16bf04ae0c059, type: 3}
-  speed: 15
-  range: 10
-  size: 0.5
-  color: {r: 0.2, g: 1, b: 0.3, a: 1}
-  cooldown: 1
-  spawnHeight: 0
-  cam: {fileID: 0}
---- !u!114 &1222977598
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1222977593}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 30edd39488afd1e4b9fef6eeddeb48ec, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Health
-  team: 0
-  maxHealth: 100
-  startingHealth: 25
-  respawn: 1
-  respawnDelay: 3
---- !u!114 &1222977599
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1222977593}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dcd2394e342119a4593512bec5e676df, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::HealthBar
-  heightOffset: 1.6
-  size: {x: 1.2, y: 0.15}
-  fillColor: {r: 0.15, g: 0.85, b: 0.25, a: 1}
-  backgroundColor: {r: 0, g: 0, b: 0, a: 0.7}
---- !u!114 &1222977600
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1222977593}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5510147772bc04429709a92df5c3ae7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Outline
-  color: {r: 0, g: 1, b: 0.2, a: 1}
   width: 0.04
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
