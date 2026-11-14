@@ -8,9 +8,11 @@ public class SkillshotProjectile : MonoBehaviour
     float range;
     float travelled;
     GameObject owner;
+    float damage;
 
-    public void Launch(Vector3 dir, float spd, float maxRange, GameObject caster)
+    public void Launch(Vector3 dir, float spd, float maxRange, GameObject caster, float dmg = 25f)
     {
+        damage = dmg;
         direction = dir;
         speed = spd;
         range = maxRange;
@@ -32,6 +34,10 @@ public class SkillshotProjectile : MonoBehaviour
         if (other.name == "Ground") return; // skim along the floor
 
         Debug.Log($"Q hit {other.name}");
+
+        Health health = other.GetComponentInParent<Health>();
+        if (health != null) health.TakeDamage(damage);
+
         Destroy(gameObject);
     }
 }

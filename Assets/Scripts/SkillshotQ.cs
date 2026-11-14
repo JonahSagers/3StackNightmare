@@ -8,6 +8,7 @@ public class SkillshotQ : MonoBehaviour
     [Tooltip("Your Q_Projectile prefab. Leave empty to fall back to a plain sphere.")]
     public GameObject projectilePrefab;
 
+    public float damage = 25f;
     public float speed = 15f;
     public float range = 10f;
     public float size = 0.5f;
@@ -91,7 +92,7 @@ public class SkillshotQ : MonoBehaviour
 
         SkillshotProjectile projectile = ball.GetComponent<SkillshotProjectile>();
         if (projectile == null) projectile = ball.AddComponent<SkillshotProjectile>();
-        projectile.Launch(direction, speed, range, gameObject);
+        projectile.Launch(direction, speed, range, gameObject, damage);
 
         // Face the shot direction too, like casting a spell.
         transform.rotation = spawnRot;
