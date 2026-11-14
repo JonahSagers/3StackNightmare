@@ -5,6 +5,9 @@ using UnityEngine.InputSystem;
 public class SkillshotQ : MonoBehaviour
 {
     [Header("Projectile")]
+    [Tooltip("Your Q_Projectile prefab. Leave empty to fall back to a plain sphere.")]
+    public GameObject projectilePrefab;
+
     public float speed = 15f;
     public float range = 10f;
     public float size = 0.5f;
@@ -56,27 +59,41 @@ public class SkillshotQ : MonoBehaviour
 
     void Fire(Vector3 direction)
     {
-        GameObject ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        ball.name = "Q Skillshot";
-        ball.transform.position = transform.position + Vector3.up * spawnHeight + direction * 0.75f;
-        ball.transform.localScale = Vector3.one * size;
+        Vector3 spawnPos = transform.position + Vector3.up * spawnHeight + direction * 0.75f;
+        Quaternion spawnRot = Quaternion.LookRotation(direction, Vector3.up); // so trails/particles point the right way
 
-        // Tint it so it stands out (works with URP's default material).
-        var renderer = ball.GetComponent<Renderer>();
-        renderer.material.color = color;
+        GameObject ball;
+        if (projectilePrefab != null)
+        {
+            ball = Instantiate(projectilePrefab, spawnPos, spawnRot);
+            ball.name = "Q Skillshot";
+        }
+        else
+        {
+            // No prefab assigned: plain tinted sphere, like before.
+            ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            ball.name = "Q Skillshot";
+            ball.transform.SetPositionAndRotation(spawnPos, spawnRot);
+            ball.transform.localScale = Vector3.one * size;
+            ball.GetComponent<Renderer>().material.color = color;
+        }
 
-        // Make it a trigger so it doesn't shove the player or the ground around.
-        ball.GetComponent<Collider>().isTrigger = true;
+        // Make sure it can detect hits, whether or not the prefab already has these.
+        Collider col = ball.GetComponent<Collider>();
+        if (col == null) col = ball.AddComponent<SphereCollider>();
+        col.isTrigger = true; // don't shove the player or ground around
 
         // Trigger events need a Rigidbody on at least one side. Kinematic = we move it ourselves.
-        var body = ball.AddComponent<Rigidbody>();
+        Rigidbody body = ball.GetComponent<Rigidbody>();
+        if (body == null) body = ball.AddComponent<Rigidbody>();
         body.isKinematic = true;
         body.useGravity = false;
 
-        var projectile = ball.AddComponent<SkillshotProjectile>();
+        SkillshotProjectile projectile = ball.GetComponent<SkillshotProjectile>();
+        if (projectile == null) projectile = ball.AddComponent<SkillshotProjectile>();
         projectile.Launch(direction, speed, range, gameObject);
 
         // Face the shot direction too, like casting a spell.
-        transform.rotation = Quaternion.LookRotation(direction, Vector3.up);
+        transform.rotation = spawnRot;
     }
 }

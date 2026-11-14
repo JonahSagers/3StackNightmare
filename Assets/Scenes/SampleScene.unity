@@ -786,6 +786,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e27f048fce293694893166cd63dd077e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SkillshotQ
+  projectilePrefab: {fileID: 5168104847546051517, guid: f53aea29f70b24c43a3e5d59243c7b3e, type: 3}
   speed: 15
   range: 10
   size: 0.5
