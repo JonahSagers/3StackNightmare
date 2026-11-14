@@ -575,6 +575,7 @@ GameObject:
   - component: {fileID: 1841500943}
   - component: {fileID: 1841500942}
   - component: {fileID: 1841500946}
+  - component: {fileID: 1841500947}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -692,6 +693,25 @@ MonoBehaviour:
   moveSpeed: 5
   turnSpeed: 720
   stopDistance: 0.1
+  cam: {fileID: 0}
+--- !u!114 &1841500947
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1841500941}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e27f048fce293694893166cd63dd077e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SkillshotQ
+  speed: 15
+  range: 10
+  size: 0.5
+  color: {r: 0.3, g: 0.7, b: 1, a: 1}
+  cooldown: 1
+  spawnHeight: 0
   cam: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
