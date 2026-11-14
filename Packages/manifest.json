@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.singularitygroup.hotreload": "git+https://gitlab.hotreload.net/root/hot-reload-releases.git#1.13.26",
     "com.unity.ai.assistant": "2.21.0-pre.2",
     "com.unity.ai.navigation": "2.0.16",
     "com.unity.collab-proxy": "2.14.0",
