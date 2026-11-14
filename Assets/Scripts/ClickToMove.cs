@@ -16,12 +16,25 @@ public class ClickToMove : MonoBehaviour
     [Tooltip("Camera used to turn the mouse position into a world point. Defaults to Main Camera.")]
     public Camera cam;
 
+    [Header("Bounds")]
+    [Tooltip("The player can't leave this collider's area. Defaults to the object named \"Ground\".")]
+    public Collider ground;
+
+    [Tooltip("How far from the edge the player stops. ~ the player's radius keeps it fully on the floor.")]
+    public float edgePadding = 0.5f;
+
     Vector3 targetPosition;
     bool hasTarget;
 
     void Start()
     {
         if (cam == null) cam = Camera.main;
+
+        if (ground == null)
+        {
+            GameObject g = GameObject.Find("Ground");
+            if (g != null) ground = g.GetComponent<Collider>();
+        }
     }
 
     void Update()
@@ -30,7 +43,7 @@ public class ClickToMove : MonoBehaviour
         if (mouse != null && mouse.rightButton.wasPressedThisFrame && TryGetClickPoint(mouse.position.ReadValue(), out Vector3 point))
         {
             // Keep the player's own height so it doesn't sink into the floor.
-            targetPosition = new Vector3(point.x, transform.position.y, point.z);
+            targetPosition = ClampToGround(new Vector3(point.x, transform.position.y, point.z));
             hasTarget = true;
         }
 
@@ -43,10 +56,23 @@ public class ClickToMove : MonoBehaviour
             return;
         }
 
-        transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+        transform.position = ClampToGround(Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime));
 
         Quaternion look = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
         transform.rotation = Quaternion.RotateTowards(transform.rotation, look, turnSpeed * Time.deltaTime);
+    }
+
+    // Keeps a position inside the ground's area (X and Z only; height is left alone).
+    Vector3 ClampToGround(Vector3 pos)
+    {
+        if (ground == null) return pos;
+
+        Bounds b = ground.bounds;
+        float padX = Mathf.Min(edgePadding, b.extents.x);
+        float padZ = Mathf.Min(edgePadding, b.extents.z);
+        pos.x = Mathf.Clamp(pos.x, b.min.x + padX, b.max.x - padX);
+        pos.z = Mathf.Clamp(pos.z, b.min.z + padZ, b.max.z - padZ);
+        return pos;
     }
 
     bool TryGetClickPoint(Vector2 screenPos, out Vector3 point)
