@@ -418,7 +418,11 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   maxDistance: 1000
+  selectedComponents: []
   onComponentSelected:
+    m_PersistentCalls:
+      m_Calls: []
+  onComponentDeselected:
     m_PersistentCalls:
       m_Calls: []
   logSelection: 1
@@ -432,9 +436,17 @@ MonoBehaviour:
   backgroundColor: {r: 0.11, g: 0.11, b: 0.13, a: 0.96}
   hoverColor: {r: 0.22, g: 0.47, b: 0.96, a: 1}
   pressedColor: {r: 0.16, g: 0.36, b: 0.8, a: 1}
+  selectedColor: {r: 0.2, g: 0.62, b: 0.42, a: 1}
+  selectedHoverColor: {r: 0.26, g: 0.72, b: 0.5, a: 1}
   dividerColor: {r: 1, g: 1, b: 1, a: 0.08}
   textColor: {r: 0.93, g: 0.93, b: 0.95, a: 1}
   shadowColor: {r: 0, g: 0, b: 0, a: 0.35}
+  prompt: 
+  promptPlaceholder: Type a prompt...
+  promptHeight: 40
+  promptGap: 8
+  promptBackgroundColor: {r: 0.15, g: 0.15, b: 0.18, a: 0.96}
+  promptPlaceholderColor: {r: 0.78431374, g: 0.78431374, b: 0.78431374, a: 0.35}
 --- !u!4 &492044621
 Transform:
   m_ObjectHideFlags: 0

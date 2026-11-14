@@ -394,63 +394,76 @@ public class MouseHandler : MonoBehaviour
         placeholderStyle.normal.textColor = promptPlaceholderColor;
     }
 
-    /// <summary>Builds a white anti-aliased squircle (superellipse-cornered rect) mask at menu size.</summary>
-    void EnsureMask(Vector2 size)
+    /// <summary>Cached white anti-aliased squircle (superellipse-cornered rect) mask texture.</summary>
+    class SquircleMask
     {
-        // Render at UI scale so edges stay crisp on high-DPI displays.
-        float scale = Mathf.Max(1f, GUI.matrix.lossyScale.x);
-        Vector2Int px = new Vector2Int(
-            Mathf.Max(2, Mathf.CeilToInt(size.x * scale)),
-            Mathf.Max(2, Mathf.CeilToInt(size.y * scale)));
+        public Texture2D Texture { get; private set; }
+        Vector2Int size;
+        float radius, exponent;
 
-        if (maskTex != null && px == maskSize &&
-            Mathf.Approximately(maskRadius, cornerRadius) &&
-            Mathf.Approximately(maskExponent, squircleExponent))
-            return;
-
-        if (maskTex != null) Destroy(maskTex);
-        maskSize = px;
-        maskRadius = cornerRadius;
-        maskExponent = squircleExponent;
-
-        maskTex = new Texture2D(px.x, px.y, TextureFormat.RGBA32, false)
+        public void Ensure(Vector2 guiSize, float cornerRadius, float squircleExponent)
         {
-            wrapMode = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Bilinear,
-            hideFlags = HideFlags.HideAndDontSave,
-        };
+            // Render at UI scale so edges stay crisp on high-DPI displays.
+            float scale = Mathf.Max(1f, GUI.matrix.lossyScale.x);
+            Vector2Int px = new Vector2Int(
+                Mathf.Max(2, Mathf.CeilToInt(guiSize.x * scale)),
+                Mathf.Max(2, Mathf.CeilToInt(guiSize.y * scale)));
 
-        float r = Mathf.Min(cornerRadius * scale, px.x * 0.5f, px.y * 0.5f);
-        float p = squircleExponent;
-        var pixels = new Color32[px.x * px.y];
+            if (Texture != null && px == size &&
+                Mathf.Approximately(radius, cornerRadius) &&
+                Mathf.Approximately(exponent, squircleExponent))
+                return;
 
-        for (int y = 0; y < px.y; y++)
-        {
-            for (int x = 0; x < px.x; x++)
+            Dispose();
+            size = px;
+            radius = cornerRadius;
+            exponent = squircleExponent;
+
+            Texture = new Texture2D(px.x, px.y, TextureFormat.RGBA32, false)
             {
-                // Pixel center, distance into the corner zone on each axis.
-                float cx = x + 0.5f, cy = y + 0.5f;
-                float dx = Mathf.Max(0f, Mathf.Max(r - cx, cx - (px.x - r)));
-                float dy = Mathf.Max(0f, Mathf.Max(r - cy, cy - (px.y - r)));
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave,
+            };
 
-                float alpha;
-                if (dx <= 0f || dy <= 0f)
-                {
-                    // Straight edges: anti-alias against the outer border.
-                    float edge = Mathf.Min(Mathf.Min(cx, px.x - cx), Mathf.Min(cy, px.y - cy));
-                    alpha = Mathf.Clamp01(edge + 0.5f);
-                }
-                else
-                {
-                    float d = Mathf.Pow(Mathf.Pow(dx, p) + Mathf.Pow(dy, p), 1f / p);
-                    alpha = Mathf.Clamp01(r - d + 0.5f);
-                }
+            float r = Mathf.Min(cornerRadius * scale, px.x * 0.5f, px.y * 0.5f);
+            float p = squircleExponent;
+            var pixels = new Color32[px.x * px.y];
 
-                pixels[y * px.x + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
+            for (int y = 0; y < px.y; y++)
+            {
+                for (int x = 0; x < px.x; x++)
+                {
+                    // Pixel center, distance into the corner zone on each axis.
+                    float cx = x + 0.5f, cy = y + 0.5f;
+                    float dx = Mathf.Max(0f, Mathf.Max(r - cx, cx - (px.x - r)));
+                    float dy = Mathf.Max(0f, Mathf.Max(r - cy, cy - (px.y - r)));
+
+                    float alpha;
+                    if (dx <= 0f || dy <= 0f)
+                    {
+                        // Straight edges: anti-alias against the outer border.
+                        float edge = Mathf.Min(Mathf.Min(cx, px.x - cx), Mathf.Min(cy, px.y - cy));
+                        alpha = Mathf.Clamp01(edge + 0.5f);
+                    }
+                    else
+                    {
+                        float d = Mathf.Pow(Mathf.Pow(dx, p) + Mathf.Pow(dy, p), 1f / p);
+                        alpha = Mathf.Clamp01(r - d + 0.5f);
+                    }
+
+                    pixels[y * px.x + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
+                }
             }
+
+            Texture.SetPixels32(pixels);
+            Texture.Apply(false, false);
         }
 
-        maskTex.SetPixels32(pixels);
-        maskTex.Apply(false, false);
+        public void Dispose()
+        {
+            if (Texture != null) Object.Destroy(Texture);
+            Texture = null;
+        }
     }
 }
