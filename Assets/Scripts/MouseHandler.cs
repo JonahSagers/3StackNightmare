@@ -1,7 +1,9 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
+using UnityEngine.Networking;
 
 /// <summary>
 /// Raycasts from the mouse position every frame and stores the GameObject under the cursor.
@@ -191,9 +193,64 @@ public class MouseHandler : MonoBehaviour
         focusPromptNext = true;
     }
 
+    [Header("Pi Bridge")]
+    [Tooltip("Endpoint of the pi unity-bridge extension (.pi/extensions/unity-bridge.ts).")]
+    public string piBridgeUrl = "http://127.0.0.1:7777/prompt";
+
+    [System.Serializable]
+    class PromptPayload
+    {
+        public string prompt;
+        public string scene;
+        public string target;
+        public string targetPath;
+        public string[] components;
+        public string[] selectedComponents;
+    }
+
     void SendPrompt()
     {
         Debug.Log("Prompt: " + prompt);
+
+        // Capture everything now: CloseMenu() clears the prompt and target right after this call.
+        var payload = new PromptPayload
+        {
+            prompt = prompt,
+            scene = gameObject.scene.name,
+            target = menuTarget != null ? menuTarget.name : null,
+            targetPath = menuTarget != null ? HierarchyPath(menuTarget.transform) : null,
+            components = options.ConvertAll(o => o.label).ToArray(),
+            selectedComponents = selectedComponents.FindAll(c => c != null)
+                .ConvertAll(c => $"{c.GetType().Name} on '{HierarchyPath(c.transform)}'").ToArray(),
+        };
+
+        StartCoroutine(PostToPi(JsonUtility.ToJson(payload)));
+    }
+
+    IEnumerator PostToPi(string json)
+    {
+        using (var req = new UnityWebRequest(piBridgeUrl, UnityWebRequest.kHttpVerbPOST))
+        {
+            req.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(json));
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json");
+            req.timeout = 5;
+
+            yield return req.SendWebRequest();
+
+            if (req.result == UnityWebRequest.Result.Success)
+                Debug.Log("[MouseHandler] Prompt sent to pi");
+            else
+                Debug.LogWarning($"[MouseHandler] Could not reach pi at {piBridgeUrl}: {req.error}. " +
+                                 "Is pi running with the unity-bridge extension loaded (/reload)?");
+        }
+    }
+
+    static string HierarchyPath(Transform t)
+    {
+        string path = t.name;
+        while (t.parent != null) { t = t.parent; path = t.name + "/" + path; }
+        return path;
     }
 
     void CloseMenu()
