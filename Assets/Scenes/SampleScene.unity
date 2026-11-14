@@ -383,6 +383,73 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &492044619
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 492044621}
+  - component: {fileID: 492044620}
+  m_Layer: 0
+  m_Name: MouseHandler
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &492044620
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 492044619}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d00a8cb4a98e443b2806d8b1911fbf80, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MouseHandler
+  hovered: {fileID: 0}
+  cam: {fileID: 330585545}
+  hoverMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  maxDistance: 1000
+  onComponentSelected:
+    m_PersistentCalls:
+      m_Calls: []
+  logSelection: 1
+  layout: 0
+  segmentWidth: 300
+  segmentHeight: 40
+  cornerRadius: 18
+  squircleExponent: 4.5
+  cursorOffset: {x: 12, y: 12}
+  fontSize: 20
+  backgroundColor: {r: 0.11, g: 0.11, b: 0.13, a: 0.96}
+  hoverColor: {r: 0.22, g: 0.47, b: 0.96, a: 1}
+  pressedColor: {r: 0.16, g: 0.36, b: 0.8, a: 1}
+  dividerColor: {r: 1, g: 1, b: 1, a: 0.08}
+  textColor: {r: 0.93, g: 0.93, b: 0.95, a: 1}
+  shadowColor: {r: 0, g: 0, b: 0, a: 0.35}
+--- !u!4 &492044621
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 492044619}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -552,3 +619,4 @@ SceneRoots:
   - {fileID: 410087041}
   - {fileID: 832575519}
   - {fileID: 1485588706}
+  - {fileID: 492044621}
