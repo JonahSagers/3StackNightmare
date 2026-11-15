@@ -29,9 +29,32 @@ const IS_REVIEWER = !!process.env.PI_REGRESSION_REVIEWER;
 const REVIEWER_CMD = process.env.PI_REVIEWER_CMD ?? "pi";
 // The reviewer is a full agent run (reading files, calling Unity, thinking), which can take several minutes.
 const REVIEW_TIMEOUT_MS = 15 * 60 * 1000;
+// After a fast PASS, the reviewer agent still double-checks the diff against the Game rules in AGENTS.md
+// (catches rules no check covers). Set PI_REGRESSION_AI_DOUBLECHECK=0 to skip it.
+const AI_DOUBLECHECK = process.env.PI_REGRESSION_AI_DOUBLECHECK !== "0";
 
 const GAME_FILE = /\.(cs|unity|prefab|mat|asset|shader)$/i;
-const UNITY_MUTATING_TOOL = /^mcp__unity__.*(set_|create|delete|destroy|batch|add_|remove_|save|instantiate)/i;
+
+// The regression checks and tools. The editing agent may not change these: an agent that can rewrite
+// the tests can make any change "pass". (The reviewer runs with this gate off, so it can still fix them.)
+const PROTECTED_PATH =
+	/(Assets[\\/]Scripts[\\/]Regression[\\/])|(Assets[\\/]Tests[\\/])|(Assets[\\/]Editor[\\/](RegressionReporter|BalanceSnapshot|RegressionWindow)\.cs)|(\.pi[\\/]extensions[\\/]regression-gate\.ts)/i;
+const PROTECTED_NAME = /(RegressionSuite|RegressionStatusFiles|RegressionHUD|GameRulesTests|RegressionReporter|BalanceSnapshot|RegressionWindow|regression-gate)/i;
+const WRITES_FILES = /(>|\bsed\s+-i|\bperl\s+-i|\bmv\b|\bcp\b|\brm\b|\bdel\b|Set-Content|Add-Content|Out-File|Remove-Item|Move-Item|Copy-Item|\btee\b|\bpython|\bnode\b|git\s+(checkout|restore|reset))/i;
+/** True if a shell command looks like it writes files (ignores harmless redirects like 2>&1 or >/dev/null). */
+function writesFiles(command: string): boolean {
+	const cleaned = command.replace(/\d?>&\d/g, " ").replace(/\d?>\s*\/dev\/null/g, " ").replace(/[-=]>/g, " ").replace(/\$null/gi, " ");
+	return WRITES_FILES.test(cleaned);
+}
+
+const PROTECTED_REASON =
+	"regression-gate: the regression checks and tools are protected, so the editing agent can't change them. " +
+	"Make only the gameplay change the user asked for. If it breaks a check, the regression gate will flag it " +
+	"and the user (or the reviewer agent) decides whether that rule should change.";
+// Unity tools that change the scene. Script eval/run counts too: agent C# can change anything.
+const UNITY_MUTATING_TOOL = /^mcp__unity__.*(set_|create|delete|destroy|batch|add_|remove_|save|instantiate|eval|script_run)/i;
+// Game files named in a shell command (so shell edits get backed up too).
+const GAME_FILE_IN_TEXT = /[\w.\/\\-]+\.(cs|unity|prefab|mat|asset|shader)\b/gi;
 
 function textOf(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -173,10 +196,32 @@ export default function (pi: ExtensionAPI) {
 		return { changes, hasBaseline };
 	};
 
+	/** Backs up a game file before it changes (once per request). */
+	const backUp = (filePath: string) => {
+		const original = path.resolve(cwd(), filePath);
+		if (backedUp.has(original)) return;
+		fs.mkdirSync(runDir, { recursive: true });
+		if (fs.existsSync(original)) {
+			const backup = path.join(runDir, path.relative(cwd(), original));
+			fs.mkdirSync(path.dirname(backup), { recursive: true });
+			fs.copyFileSync(original, backup);
+			backedUp.set(original, backup);
+		} else backedUp.set(original, "NEW");
+		const manifest = [...backedUp]
+			.map(([o, b]) => `${path.relative(cwd(), o)}\t${b === "NEW" ? "NEW" : path.relative(cwd(), b)}`)
+			.join("\n");
+		fs.writeFileSync(path.join(runDir, "manifest.txt"), manifest + "\n");
+	};
+
 	/** Runs the separate reviewer agent and records its verdict. */
-	const runReviewer = async (prompt: string) => {
+	const runReviewer = async (prompt: string, keepPassIfNoVerdict?: string, forRequest?: number) => {
 		const env = { ...process.env, PI_REGRESSION_REVIEWER: "1" };
-		const output = await runProcess(REVIEWER_CMD, ["-p", prompt], cwd(), env, REVIEW_TIMEOUT_MS);
+		// The full instructions go in a file: Windows caps a command line at ~8000 characters.
+		const promptFile = statusFile(`reviewer-prompt-${forRequest ?? reviewStart}.txt`);
+		fs.mkdirSync(statusDir(), { recursive: true });
+		fs.writeFileSync(promptFile, prompt);
+		const shortPrompt = `You are the regression reviewer. Read your full instructions in ${path.relative(cwd(), promptFile)} and follow them exactly, including the VERDICT line at the end.`;
+		const output = await runProcess(REVIEWER_CMD, ["-p", shortPrompt], cwd(), env, REVIEW_TIMEOUT_MS);
 		try {
 			fs.writeFileSync(statusFile("reviewer-log.txt"), `${new Date().toISOString()}\n\n--- PROMPT ---\n${prompt}\n\n--- OUTPUT ---\n${output}\n`);
 		} catch {
@@ -193,6 +238,16 @@ export default function (pi: ExtensionAPI) {
 				break;
 			}
 		}
+		// A background double-check that finishes after a newer request started: don't overwrite that request's status.
+		if (forRequest !== undefined && forRequest !== reviewStart) {
+			notify(`Regression reviewer (earlier request): ${verdict} - ${summary}`, verdict === "PASS" ? "info" : "warning");
+			return;
+		}
+		if (verdict === "ERROR" && keepPassIfNoVerdict) {
+			writeReview("PASS", `${keepPassIfNoVerdict}; AI double-check didn't finish (see reviewer-log.txt)`);
+			return;
+		}
+		if (verdict === "PASS" && keepPassIfNoVerdict) summary = `${keepPassIfNoVerdict}; AI reviewer agrees: ${summary}`;
 		writeReview(verdict, summary);
 		notify(`Regression reviewer: ${verdict} - ${summary}`, verdict === "PASS" ? "info" : verdict === "REVERTED" ? "warning" : "error");
 	};
@@ -228,22 +283,25 @@ export default function (pi: ExtensionAPI) {
 		const input = event.input as Record<string, unknown>;
 		const name = event.toolName;
 
-		if ((name === "write" || name === "edit") && typeof input.path === "string" && GAME_FILE.test(input.path)) {
-			const original = path.resolve(cwd(), input.path);
-			if (!backedUp.has(original)) {
-				// Back up BEFORE the edit runs (tool_call fires before execution).
-				fs.mkdirSync(runDir, { recursive: true });
-				if (fs.existsSync(original)) {
-					const backup = path.join(runDir, path.relative(cwd(), original));
-					fs.mkdirSync(path.dirname(backup), { recursive: true });
-					fs.copyFileSync(original, backup);
-					backedUp.set(original, backup);
-				} else backedUp.set(original, "NEW");
-				const manifest = [...backedUp]
-					.map(([o, b]) => `${path.relative(cwd(), o)}\t${b === "NEW" ? "NEW" : path.relative(cwd(), b)}`)
-					.join("\n");
-				fs.writeFileSync(path.join(runDir, "manifest.txt"), manifest + "\n");
+		// Keep the editing agent's hands off the tests.
+		if ((name === "write" || name === "edit") && typeof input.path === "string" && PROTECTED_PATH.test(input.path))
+			return { block: true, reason: PROTECTED_REASON };
+		if (name === "bash" && typeof input.command === "string" && PROTECTED_NAME.test(input.command) && writesFiles(input.command))
+			return { block: true, reason: PROTECTED_REASON };
+
+		// Back up BEFORE the edit runs (tool_call fires before execution).
+		if ((name === "write" || name === "edit") && typeof input.path === "string" && GAME_FILE.test(input.path)) backUp(input.path);
+
+		// Shell commands that write files: back up any game files they name, and review afterward either way.
+		if (name === "bash" && typeof input.command === "string" && writesFiles(input.command)) {
+			for (const m of input.command.match(GAME_FILE_IN_TEXT) ?? []) {
+				try {
+					backUp(m);
+				} catch {
+					/* not a real path */
+				}
 			}
+			changedScene = true;
 		}
 		if (UNITY_MUTATING_TOOL.test(name)) changedScene = true;
 	});
@@ -276,10 +334,28 @@ export default function (pi: ExtensionAPI) {
 					changes.length === 0 ? "no tunable values changed" : `changed: ${changes.slice(0, 3).join(", ")}${changes.length > 3 ? ` (+${changes.length - 3} more)` : ""}`;
 
 				if (failures.length === 0) {
-					// Step 6, fast path.
+					// Step 6, fast path: instant PASS...
 					const summary = `${passed}/${passed} checks passed; ${changeText}`;
-					writeReview("PASS", summary);
+					const doubleCheck = AI_DOUBLECHECK && backedUp.size > 0;
+					writeReview("PASS", doubleCheck ? `${summary}; AI reviewer double-checking...` : summary);
 					notify(`Regression check: PASS - ${summary}`, "info");
+					if (!doubleCheck) return;
+
+					// ...then the reviewer agent looks for rule breaks no check covers (verdict may change).
+					const prompt = [
+						"You are the REGRESSION REVIEWER for this Unity project. Follow AGENTS.md, especially its Game rules section.",
+						`A different agent just made changes for this user request: <<< ${request} >>>`,
+						`Files it changed: ${files.replace(/\n/g, " ")}`,
+						`Originals were backed up before editing. ${manifest} maps each changed file to its backup (tab-separated; NEW = the file didn't exist before).`,
+						`All ${passed} automated regression checks PASSED, and balance values: ${changeText}.`,
+						"Your job is to catch what the checks might miss. Compare each changed file with its backup and look for anything that breaks a Game rule in AGENTS.md (friendly fire, healing enemies, abilities ignoring teams/cooldowns, shields or heals that never end, values the user didn't ask to change, and so on).",
+						"Do NOT add features or adjust the change.",
+						"(a) No rule broken: verdict PASS.",
+						"(b) A rule is broken that the user did NOT ask to change: revert (copy each backup over its original, delete files marked NEW), then script eval `return RegressionReporter.RunAll();`, wait for Library/RegressionStatus/tests.txt to update, confirm it passes. Verdict REVERTED, naming the rule.",
+						"(c) The user deliberately asked to break a rule: don't revert. Verdict FAIL, naming the rule so the user knows.",
+						"End your reply with exactly one line in this format: VERDICT: PASS|FAIL|REVERTED - <one short sentence>",
+					].join("\n");
+					void runReviewer(prompt, summary, reviewStart); // runs in the background; new requests aren't blocked
 					return;
 				}
 

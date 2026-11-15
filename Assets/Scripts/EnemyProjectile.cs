@@ -42,10 +42,17 @@ public class EnemyProjectile : MonoBehaviour
             if (!ShouldHit(health, target)) continue;
 
             health.TakeDamage(damage);
-            Destroy(gameObject);
+            Despawn();
             return;
         }
 
-        if (travelled >= maxDistance) Destroy(gameObject);
+        if (travelled >= maxDistance) Despawn();
+    }
+
+    // Destroy only works in Play mode; the regression checks also fire shots in Edit mode.
+    void Despawn()
+    {
+        if (Application.isPlaying) Destroy(gameObject);
+        else DestroyImmediate(gameObject);
     }
 }

@@ -243,8 +243,21 @@ public class RegressionHUD : MonoBehaviour
         bool showList = total > 0 && (snap.runActive || listOpen || Time.unscaledTime < listUntil);
         if (showList)
         {
-            foreach (RegressionSuite.Result r in snap.checks)
+            // Too many to show at once: a window around the check that's running (or the last ones),
+            // and failures always stay visible.
+            const int MaxListRows = 14;
+            int focus = snap.checks.Count - 1;
+            for (int i = 0; i < snap.checks.Count; i++)
+                if (snap.checks[i].state == RegressionSuite.State.Running || snap.checks[i].state == RegressionSuite.State.Pending) { focus = i; break; }
+            int first = Mathf.Clamp(focus - MaxListRows / 2, 0, Mathf.Max(0, snap.checks.Count - MaxListRows));
+            int last = Mathf.Min(snap.checks.Count, first + MaxListRows);
+            if (first > 0) rows.Add(Text(Colored($"... {first} earlier check{(first == 1 ? "" : "s")}", ColDim), 28f));
+
+            for (int index = 0; index < snap.checks.Count; index++)
             {
+                RegressionSuite.Result r = snap.checks[index];
+                bool inWindow = index >= first && index < last;
+                if (!inWindow && r.state != RegressionSuite.State.Failed) continue;
                 Row row = Text(r.name, 6f);
                 switch (r.state)
                 {
@@ -255,6 +268,7 @@ public class RegressionHUD : MonoBehaviour
                 }
                 rows.Add(row);
             }
+            if (last < snap.checks.Count) rows.Add(Text(Colored($"... {snap.checks.Count - last} more", ColDim), 28f));
         }
         else
         {

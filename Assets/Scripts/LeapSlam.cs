@@ -103,12 +103,15 @@ public class LeapSlam : MonoBehaviour
         leaping = false;
     }
 
+    // The hit rule for the slam (kept in one place so the regression checks can test it): only living enemies.
+    public static bool ShouldHit(Health health) => health != null && health.team == Team.Enemy && !health.IsDead;
+
     void Impact(Vector3 center)
     {
         foreach (Collider hit in Physics.OverlapSphere(center, radius))
         {
             Health health = hit.GetComponentInParent<Health>();
-            if (health == null || health.team != Team.Enemy || health.IsDead) continue;
+            if (!ShouldHit(health)) continue;
 
             health.TakeDamage(damage);
 

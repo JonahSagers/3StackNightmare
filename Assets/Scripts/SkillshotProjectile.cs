@@ -52,6 +52,13 @@ public class SkillshotProjectile : MonoBehaviour
 
         Debug.Log($"{name} hit {other.name}");
 
-        Destroy(gameObject);
+        Despawn();
+    }
+
+    // Destroy only works in Play mode; the regression checks also fire shots in Edit mode.
+    void Despawn()
+    {
+        if (Application.isPlaying) Destroy(gameObject);
+        else DestroyImmediate(gameObject);
     }
 }
