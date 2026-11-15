@@ -7,7 +7,7 @@ public class Outline : MonoBehaviour
     public Color color = Color.red;
 
     [Range(0f, 0.3f)]
-    public float width = 0.04f;
+    public float width = 0.06f;
 
     [Tooltip("Whether the outline is drawn at start. MouseHandler shows it purple while hovered, then restores this.")]
     public bool visible = false;

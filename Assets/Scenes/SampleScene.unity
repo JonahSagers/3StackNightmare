@@ -810,7 +810,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 0, g: 1, b: 0.2, a: 1}
-  width: 0.04
+  width: 0.06
   visible: 0
 --- !u!1 &1681150265
 GameObject:
@@ -963,7 +963,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 1, g: 0, b: 0, a: 1}
-  width: 0.04
+  width: 0.06
   visible: 0
 --- !u!1 &1841500941
 GameObject:
@@ -1262,7 +1262,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 1, g: 0, b: 0, a: 1}
-  width: 0.04
+  width: 0.06
   visible: 0
 --- !u!1 &1966940802
 GameObject:
@@ -1431,7 +1431,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 1, g: 0, b: 0, a: 1}
-  width: 0.04
+  width: 0.06
   visible: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
