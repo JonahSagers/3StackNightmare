@@ -38,8 +38,8 @@ Script edits must take effect immediately, including during Play mode. Hot Reloa
 - **When the pipeline server is unreachable**, Unity is reloading (domain reload / entering Play mode); wait a few seconds and retry instead of reporting failure.
 
 ### Don't
-- **Don't force a recompile in the middle of a task.** Don't recompile after each script edit; let Hot Reload patch while you work.
-- **Do force a domain reload once you've finished all changes** for a request: run `unity recompile` (or `mcp__unity__recompile`). This guarantees every change is actually loaded, including ones Hot Reload couldn't apply (new classes, blocked patches). Then wait for the pipeline server to come back ("Cannot connect" means it's still reloading, so retry). Check `unity cmd console get --level error` for compile errors and fix them before reporting done. If Play mode is active, warn the user that the reload may reset the running game's state.
+- **Never force a recompile or domain reload.** Don't run `unity recompile` / `mcp__unity__recompile`, not after each edit and not at the end of a task. Let Hot Reload patch the changes.
+- **When you've finished all changes**, check `unity cmd console get --level error` and look for `[HotReload]` errors or "Unsupported change" warnings. Fix any errors before reporting done. If some change can't be hot-patched (new classes, blocked patches), tell the user it will apply on the next recompile (e.g. when Play mode exits).
 - **Don't change these editor settings** (Hot Reload manages them): Unity Auto Refresh = off, Script Changes While Playing = Recompile After Finished Playing, Hot Reload "Auto recompile unsupported changes" = on exit Play mode.
 
 ### Scene/object changes vs. code changes
