@@ -16,6 +16,7 @@ Unity 6 project (`SampleScene`), new Input System only, URP. Unity is controlled
 ## Agent sandbox limits (enforced by `.pi/extensions/unity-eval-guard.ts`)
 - **No LINQ and no Reflection in agent-run C#**: `script_eval` (inline `code` or `file`), `script_run`, and `unity cmd script eval|run` from bash, plus `write`/`edit` of `.cs` files (blocked only when the change adds new LINQ/Reflection usages; existing ones don't block unrelated edits). That rules out `System.Linq`, LINQ extension methods (`.Where(`, `.Select(x => ...)`, `.Any(`, `.First(`, `.ToList(`, ...), query syntax, `System.Reflection`, `BindingFlags`, `*Info` types, `GetField/GetMethod/GetProperty...`, `Assembly`, `Activator`, `Type.GetType(string)`, `TypeCache`, and `dynamic`. Calls that use them are blocked before they run.
 - Use plain `for`/`foreach` loops, `List<T>` methods, and direct Unity APIs (`FindObjectsByType`, `GetComponent`, `SerializedObject`) instead.
+- **No looking at test cases while working on a `[Unity]` prompt** (enforced by `.pi/extensions/test-source-guard.ts`): `Assets/Tests/`, `Assets/Scripts/Regression/`, and `Assets/Editor/Regression*.cs` can't be read, searched, or edited, and test-source lines are stripped from search output. Test output is fine: run the checks (`script_eval` with `RegressionSuite.Run(name)` over `RegressionSuite.Names()`, or `test_run`) and read the results, the console, or `Library/RegressionStatus/`. Prompts typed directly into pi aren't restricted.
 
 ## Hot Reload workflow (com.singularitygroup.hotreload)
 

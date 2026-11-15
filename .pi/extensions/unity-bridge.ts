@@ -47,6 +47,7 @@ function rulesFor(p: PromptPayload): string[] {
 		"Never recompile (no `unity recompile` / script_recompile); just save .cs files and Hot Reload patches them.",
 		"After editing scripts, check `unity cmd console get --level error` for [HotReload] errors / \"Unsupported change\" warnings.",
 		"Your text is shown to the player in a small in-game panel. At key points (before investigating, before changing things, after verifying), write one short plain-English sentence about what you're doing and why, e.g. \"Looking at how the player's jump works.\" Don't include commands, code, file paths, or tool names in your replies; describe changes in terms of what the player will notice.",
+		"Don't read or edit the test cases (Assets/Tests, Assets/Scripts/Regression, Regression* editor scripts; blocked by test-source-guard). Build the fix from the game's behavior; you may run the checks (script_eval RegressionSuite.Run over RegressionSuite.Names(), or test_run) and read their output. The checks also run automatically before and after your change; if one that passed before fails after, you'll get its output as a follow-up and must rework the solution.",
 		"Don't list the files you changed; the panel shows a files-changed card automatically at the end.",
 	];
 	if (p.isPlaying)
