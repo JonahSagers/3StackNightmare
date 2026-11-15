@@ -47,6 +47,7 @@ public class LeapSlam : MonoBehaviour
     {
         var keyboard = Keyboard.current;
         if (keyboard == null || !keyboard[key].wasPressedThisFrame) return;
+        if (GUIUtility.keyboardControl != 0) return; // typing in a UI text field
         if (leaping || Time.time < nextReadyTime) return;
         if (!TryGetLandingPoint(out Vector3 landing)) return;
 

@@ -45,6 +45,18 @@ public class PiOutputPanel : MonoBehaviour
 
     public bool IsOpen => open;
 
+    [Header("Follow-up Box")]
+    public string followUpPlaceholder = "Ask a follow-up...";
+    public float followUpHeight = 44f;
+
+    /// <summary>Payload JSON of the last prompt sent from MouseHandler; follow-ups reuse its editor context.</summary>
+    [HideInInspector] public string contextJson;
+
+    string followUp = "";
+    const string FollowUpControl = "PiOutputPanel_FollowUp";
+    MouseHandler.SquircleMask followUpMask; // created lazily
+    GUIStyle followUpStyle, followUpPlaceholderStyle;
+
     // ---- JSON shapes returned by the bridge ---------------------------------------
     [System.Serializable] class OutputChunk { public int seq; public string kind; public string text; }
     [System.Serializable] class OutputResponse { public bool ok; public int seq; public bool busy; public OutputChunk[] chunks; }
@@ -133,6 +145,7 @@ public class PiOutputPanel : MonoBehaviour
         if (Instance == this) Instance = null;
         mask.Dispose();
         borderMask.Dispose();
+        followUpMask?.Dispose();
     }
 
     IEnumerator Poll()
@@ -278,8 +291,12 @@ public class PiOutputPanel : MonoBehaviour
         // Hairline under the header.
         PiUISprites.DrawTinted(new Rect(r.x + Pad, r.y + HeaderH, r.width - Pad * 2f, 1f), Texture2D.whiteTexture, borderColor);
 
-        Rect body = new Rect(r.x + Pad - 4f, r.y + HeaderH + 10f, r.width - Pad * 2f + 8f, r.height - HeaderH - 10f - Pad * 0.5f);
+        // Follow-up box pinned to the bottom; the output body fills the space above it.
+        Rect input = new Rect(r.x + Pad * 0.75f, r.yMax - Pad * 0.75f - followUpHeight, r.width - Pad * 1.5f, followUpHeight);
+        float bodyTop = r.y + HeaderH + 10f;
+        Rect body = new Rect(r.x + Pad - 4f, bodyTop, r.width - Pad * 2f + 8f, Mathf.Max(0f, input.y - 10f - bodyTop));
         DrawBody(body);
+        DrawFollowUp(input);
 
         GUI.color = prev;
     }
@@ -410,6 +427,98 @@ public class PiOutputPanel : MonoBehaviour
                 GUI.Label(br, b.Text, textStyle);
                 break;
         }
+    }
+
+    void DrawFollowUp(Rect rect)
+    {
+        EnsureFollowUpStyles();
+        Event e = Event.current;
+        bool focused = GUI.GetNameOfFocusedControl() == FollowUpControl;
+
+        // Background + focus ring.
+        if (followUpMask == null) followUpMask = new MouseHandler.SquircleMask();
+        float radius = Mathf.Min(cornerRadius - 4f, rect.height * 0.5f);
+        followUpMask.Ensure(rect.size, radius, squircleExponent);
+        Color ring = focused ? new Color(accentColor.r, accentColor.g, accentColor.b, 0.55f) : borderColor;
+        PiUISprites.DrawTinted(new Rect(rect.x - 1f, rect.y - 1f, rect.width + 2f, rect.height + 2f), followUpMask.Texture, ring);
+        PiUISprites.DrawTinted(rect, followUpMask.Texture, new Color(0.11f, 0.115f, 0.135f, 1f));
+
+        // Send button on the right.
+        Rect send = new Rect(rect.xMax - rect.height + 6f, rect.y + 6f, rect.height - 12f, rect.height - 12f);
+        bool canSend = !string.IsNullOrWhiteSpace(followUp);
+        bool sendHover = canSend && send.Contains(e.mousePosition);
+        Color sendBg = canSend ? (sendHover ? Color.Lerp(accentColor, Color.white, 0.15f) : accentColor) : surfaceColor;
+        PiUISprites.DrawTinted(send, PiUISprites.Circle(64), sendBg);
+        Matrix4x4 prevMatrix = GUI.matrix;
+        GUIUtility.RotateAroundPivot(-90f, send.center); // chevron points up = "send"
+        PiUISprites.DrawTinted(new Rect(send.center.x - 6f, send.center.y - 6f, 12f, 12f), PiUISprites.IconChevron(24),
+                               canSend ? Color.white : mutedColor);
+        GUI.matrix = prevMatrix;
+
+        bool submit = false;
+        if (canSend && GUI.Button(send, GUIContent.none, GUIStyle.none)) submit = true;
+
+        // Enter sends, Escape unfocuses. Handle before the TextField so it can't swallow the key.
+        if (focused && e.type == EventType.KeyDown)
+        {
+            if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter) { submit = canSend; e.Use(); }
+            else if (e.keyCode == KeyCode.Escape) { GUIUtility.keyboardControl = 0; e.Use(); }
+            else if (e.character == '\n' || e.character == '\r') e.Use();
+        }
+
+        // Clicking anywhere outside the box drops focus so game hotkeys (Space to unpause) work again.
+        if (focused && e.type == EventType.MouseDown && !rect.Contains(e.mousePosition))
+            GUIUtility.keyboardControl = 0;
+
+        Rect field = new Rect(rect.x, rect.y, rect.width - rect.height + 4f, rect.height);
+        Color prevCursor = GUI.skin.settings.cursorColor;
+        GUI.skin.settings.cursorColor = textColor;
+        GUI.SetNextControlName(FollowUpControl);
+        followUp = GUI.TextField(field, followUp ?? "", followUpStyle);
+        GUI.skin.settings.cursorColor = prevCursor;
+
+        if (string.IsNullOrEmpty(followUp))
+            GUI.Label(field, followUpPlaceholder, followUpPlaceholderStyle);
+
+        if (submit) SubmitFollowUp();
+    }
+
+    void SubmitFollowUp()
+    {
+        string text = followUp?.Trim();
+        if (string.IsNullOrEmpty(text)) return;
+        var sender = GetComponent<MouseHandler>();
+        if (sender == null) sender = FindAnyObjectByType<MouseHandler>();
+        if (sender == null) { status = "no MouseHandler to send with"; return; }
+        sender.SendFollowUp(text, contextJson);
+        followUp = "";
+        status = "sending...";
+        busy = true;
+        stickToBottom = true;
+    }
+
+    void EnsureFollowUpStyles()
+    {
+        if (followUpStyle != null && followUpStyle.fontSize == fontSize) return;
+        followUpStyle = new GUIStyle(GUI.skin.textField)
+        {
+            alignment = TextAnchor.MiddleLeft,
+            fontSize = fontSize,
+            wordWrap = false,
+            clipping = TextClipping.Clip,
+            padding = new RectOffset(14, 8, 0, 0),
+            border = new RectOffset(0, 0, 0, 0),
+            margin = new RectOffset(0, 0, 0, 0),
+        };
+        foreach (GUIStyleState s in new[] { followUpStyle.normal, followUpStyle.hover, followUpStyle.active, followUpStyle.focused,
+                                             followUpStyle.onNormal, followUpStyle.onHover, followUpStyle.onActive, followUpStyle.onFocused })
+        {
+            s.background = null;
+            s.scaledBackgrounds = null;
+            s.textColor = textColor;
+        }
+        followUpPlaceholderStyle = new GUIStyle(followUpStyle);
+        followUpPlaceholderStyle.normal.textColor = new Color(mutedColor.r, mutedColor.g, mutedColor.b, 0.7f);
     }
 
     void DrawTypingIndicator(Vector2 origin)

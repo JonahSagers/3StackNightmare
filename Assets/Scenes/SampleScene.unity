@@ -944,6 +944,8 @@ MonoBehaviour:
   damage: 15
   fireInterval: 0.5
   range: 15
+  fireAngle: 180
+  onlyWhenPlayerInRange: 0
   projectileSpeed: 12
   projectileSize: 0.25
   projectileColor: {r: 1, g: 0.25, b: 0.1, a: 1}
@@ -983,6 +985,7 @@ GameObject:
   - component: {fileID: 1841500952}
   - component: {fileID: 1841500951}
   - component: {fileID: 1841500953}
+  - component: {fileID: 1841500954}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1246,6 +1249,21 @@ MonoBehaviour:
   cooldown: 10
   bubbleColor: {r: 0.5, g: 0.85, b: 1, a: 0.35}
   bubbleSize: 2.4
+--- !u!114 &1841500954
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1841500941}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5510147772bc04429709a92df5c3ae7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Outline
+  color: {r: 1, g: 0, b: 0, a: 1}
+  width: 0.04
+  visible: 0
 --- !u!1 &1966940802
 GameObject:
   m_ObjectHideFlags: 0

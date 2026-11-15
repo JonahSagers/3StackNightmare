@@ -264,6 +264,25 @@ public class MouseHandler : MonoBehaviour
         StartCoroutine(PostToPi(JsonUtility.ToJson(payload)));
     }
 
+    /// <summary>
+    /// Sends <paramref name="text"/> to pi reusing the editor context (scene, target, components)
+    /// captured in <paramref name="contextJson"/> from an earlier prompt. Used by PiOutputPanel's follow-up box.
+    /// </summary>
+    public void SendFollowUp(string text, string contextJson)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        PromptPayload payload = null;
+        if (!string.IsNullOrEmpty(contextJson))
+        {
+            try { payload = JsonUtility.FromJson<PromptPayload>(contextJson); }
+            catch { payload = null; }
+        }
+        if (payload == null) payload = new PromptPayload { scene = gameObject.scene.name };
+        payload.prompt = text;
+        Debug.Log("Follow-up prompt: " + text);
+        StartCoroutine(PostToPi(JsonUtility.ToJson(payload)));
+    }
+
     IEnumerator PostToPi(string json)
     {
         using (var req = new UnityWebRequest(piBridgeUrl, UnityWebRequest.kHttpVerbPOST))
@@ -279,7 +298,8 @@ public class MouseHandler : MonoBehaviour
             {
                 Debug.Log("[MouseHandler] Prompt sent to pi");
                 // Stream pi's reply into the left-quarter output column.
-                PiOutputPanel.Show(gameObject, PiOutputPanel.ParseSeq(req.downloadHandler.text));
+                var panel = PiOutputPanel.Show(gameObject, PiOutputPanel.ParseSeq(req.downloadHandler.text));
+                panel.contextJson = json; // follow-ups typed in the panel reuse this context
             }
             else
                 Debug.LogWarning($"[MouseHandler] Could not reach pi at {piBridgeUrl}: {req.error}. " +
