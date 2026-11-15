@@ -21,7 +21,7 @@ public class FullHealKey : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void AutoAttach()
     {
-        var player = FindAnyObjectByType<ClickToMove>();
+        var player = FindAnyObjectByType<PlayerMove>();
         if (player != null && player.GetComponent<Health>() != null && player.GetComponent<FullHealKey>() == null)
             player.gameObject.AddComponent<FullHealKey>();
     }

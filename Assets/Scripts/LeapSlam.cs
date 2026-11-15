@@ -33,7 +33,7 @@ public class LeapSlam : MonoBehaviour
     [Tooltip("Camera used to aim with the mouse. Defaults to Main Camera.")]
     public Camera cam;
 
-    ClickToMove mover;
+    PlayerMove mover;
     float nextReadyTime;
 
     /// <summary>Time.time at which the ability can be used again (read by AbilityBar).</summary>
@@ -43,7 +43,7 @@ public class LeapSlam : MonoBehaviour
     void Start()
     {
         if (cam == null) cam = Camera.main;
-        mover = GetComponent<ClickToMove>();
+        mover = GetComponent<PlayerMove>();
     }
 
     void Update()
