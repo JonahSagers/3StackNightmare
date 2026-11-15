@@ -164,12 +164,12 @@ MonoBehaviour:
       m_Calls: []
   logSelection: 1
   layout: 0
-  segmentWidth: 170
-  segmentHeight: 40
+  segmentWidth: 300
+  segmentHeight: 60
   cornerRadius: 18
   squircleExponent: 4.5
   cursorOffset: {x: 12, y: 12}
-  fontSize: 15
+  fontSize: 20
   backgroundColor: {r: 0.11, g: 0.11, b: 0.13, a: 0.96}
   hoverColor: {r: 0.22, g: 0.47, b: 0.96, a: 1}
   pressedColor: {r: 0.16, g: 0.36, b: 0.8, a: 1}
@@ -810,7 +810,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 0, g: 1, b: 0.2, a: 1}
-  width: 0.04
+  width: 0.06
   visible: 0
 --- !u!1 &1681150265
 GameObject:
@@ -944,6 +944,8 @@ MonoBehaviour:
   damage: 15
   fireInterval: 0.5
   range: 15
+  fireAngle: 180
+  onlyWhenPlayerInRange: 0
   projectileSpeed: 12
   projectileSize: 0.25
   projectileColor: {r: 1, g: 0.25, b: 0.1, a: 1}
@@ -961,7 +963,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 1, g: 0, b: 0, a: 1}
-  width: 0.04
+  width: 0.06
   visible: 0
 --- !u!1 &1841500941
 GameObject:
@@ -983,6 +985,7 @@ GameObject:
   - component: {fileID: 1841500952}
   - component: {fileID: 1841500951}
   - component: {fileID: 1841500953}
+  - component: {fileID: 1841500954}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1246,6 +1249,21 @@ MonoBehaviour:
   cooldown: 10
   bubbleColor: {r: 0.5, g: 0.85, b: 1, a: 0.35}
   bubbleSize: 2.4
+--- !u!114 &1841500954
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1841500941}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5510147772bc04429709a92df5c3ae7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Outline
+  color: {r: 1, g: 0, b: 0, a: 1}
+  width: 0.06
+  visible: 0
 --- !u!1 &1966940802
 GameObject:
   m_ObjectHideFlags: 0
@@ -1413,7 +1431,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Outline
   color: {r: 1, g: 0, b: 0, a: 1}
-  width: 0.04
+  width: 0.06
   visible: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

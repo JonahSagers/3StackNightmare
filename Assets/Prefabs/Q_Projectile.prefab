@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 3087560262938864201}
   - component: {fileID: 2088744139321975849}
   - component: {fileID: -3542717218902620873}
+  - component: {fileID: 5466632775028218579}
   m_Layer: 0
   m_Name: Q_Projectile
   m_TagString: Untagged
@@ -232,3 +233,18 @@ TrailRenderer:
   m_Autodestruct: 0
   m_Emitting: 1
   m_ApplyActiveColorSpace: 1
+--- !u!114 &5466632775028218579
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5168104847546051517}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5510147772bc04429709a92df5c3ae7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Outline
+  color: {r: 1, g: 0, b: 0, a: 1}
+  width: 0.2
+  visible: 0
