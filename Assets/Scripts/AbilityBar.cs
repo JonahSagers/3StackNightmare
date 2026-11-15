@@ -144,8 +144,10 @@ public class AbilityBar : MonoBehaviour
         foreach (var s in slots)
         {
             if (s.root == null) continue;
-            bool held = keyboard != null && keyboard[s.key].isPressed;
-            bool pressed = keyboard != null && keyboard[s.key].wasPressedThisFrame;
+            // Keys typed into a text box don't count as ability presses (no press/denied feedback).
+            bool keysLive = keyboard != null && !PiUISprites.IsTyping;
+            bool held = keysLive && keyboard[s.key].isPressed;
+            bool pressed = keysLive && keyboard[s.key].wasPressedThisFrame;
 
             float remaining = 0f, cd = 1f;
             if (s.nextReady != null)

@@ -66,9 +66,14 @@ public class MouseHandler : MonoBehaviour
     [Tooltip("Current contents of the prompt box.")]
     public string prompt = "";
     public string promptPlaceholder = "Type a prompt...";
+    [Tooltip("Height of the empty (single-line) prompt box.")]
     public float promptHeight = 40f;
-    [Tooltip("Vertical gap between the menu and the prompt box.")]
+    [Tooltip("Vertical gap between the prompt box and the menu below it.")]
     public float promptGap = 8f;
+    [Tooltip("Max height the prompt box grows to as wrapped text adds lines.")]
+    public float promptMaxHeight = 160f;
+    [Tooltip("How quickly the prompt box animates to its new size (higher = snappier).")]
+    public float promptExpandSpeed = 14f;
     public Color promptBackgroundColor = new Color(0.15f, 0.15f, 0.18f, 0.96f);
     public Color promptPlaceholderColor = new Color(1f, 1f, 1f, 0.35f);
 
@@ -80,6 +85,8 @@ public class MouseHandler : MonoBehaviour
 
     const string PromptControl = "MouseHandler_Prompt";
     bool focusPromptNext;
+    Vector2 promptSize; // animated size of the prompt box; zero = not yet initialised
+    int promptAnimFrame = -1;
 
     // Rendering resources
     readonly SquircleMask menuMask = new SquircleMask();
@@ -175,7 +182,7 @@ public class MouseHandler : MonoBehaviour
             Vector2 guiMouse = PiUISprites.ScreenToGUI(mousePos);
 
             // Clicks on the open menu are handled by OnGUI.
-            if (menuOpen && PanelRect().Contains(guiMouse))
+            if (menuOpen && PanelContains(guiMouse))
                 return;
 
             // Clicks on the pi output column shouldn't select scene objects behind it.
@@ -219,13 +226,15 @@ public class MouseHandler : MonoBehaviour
     {
         menuTarget = target;
         BuildOptions(target);
-        Vector2 size = PanelSize();
+        Vector2 size = MenuSize();
         Vector2 p = guiPos + cursorOffset;
-        // Keep the menu on screen.
+        // Keep the menu on screen, leaving room above it for the (collapsed) prompt box.
+        float top = promptHeight + promptGap;
         menuPos = new Vector2(
             Mathf.Clamp(p.x, 0f, Mathf.Max(0f, PiUISprites.GuiWidth - size.x)),
-            Mathf.Clamp(p.y, 0f, Mathf.Max(0f, PiUISprites.GuiHeight - size.y)));
+            Mathf.Clamp(p.y, top, Mathf.Max(top, PiUISprites.GuiHeight - size.y)));
         pressedIndex = -1;
+        promptSize = Vector2.zero; // start collapsed
         menuOpen = true;
         focusPromptNext = true;
     }
@@ -243,7 +252,90 @@ public class MouseHandler : MonoBehaviour
         public string targetPath;
         public string[] components;
         public string[] selectedComponents;
+        public string[] selectedComponentFields; // parallel to selectedComponents: "field=value, ..."
+        public bool isPlaying;
+        public bool editorPaused;
+        public bool gamePaused;
     }
+
+    /// <summary>Fills the parts of the payload that must be current at send time (fields, play state).</summary>
+    void CaptureLiveState(PromptPayload payload, List<Component> comps)
+    {
+        payload.isPlaying = Application.isPlaying;
+#if UNITY_EDITOR
+        payload.editorPaused = UnityEditor.EditorApplication.isPaused;
+#endif
+        payload.gamePaused = IsGamePaused();
+        payload.selectedComponentFields = comps.ConvertAll(c => c != null ? DescribeFields(c) : "(destroyed)").ToArray();
+    }
+
+    /// <summary>Finds a component again from its "Type on 'Hierarchy/Path'" label (used for follow-ups).</summary>
+    static Component ResolveComponent(string label)
+    {
+        int on = label.IndexOf(" on '");
+        if (on < 0 || !label.EndsWith("'")) return null;
+        string type = label.Substring(0, on);
+        string path = label.Substring(on + 5, label.Length - on - 6);
+        GameObject go = GameObject.Find(path);
+        return go != null ? go.GetComponent(type) : null;
+    }
+
+    /// <summary>Current serialized field values of a component, as "field=value, ..." (property paths usable with set_field).</summary>
+    static string DescribeFields(Component c)
+    {
+#if UNITY_EDITOR
+        var so = new UnityEditor.SerializedObject(c);
+        var sb = new System.Text.StringBuilder();
+        UnityEditor.SerializedProperty it = so.GetIterator();
+        bool enter = true;
+        while (it.NextVisible(enter))
+        {
+            enter = false;
+            if (it.propertyPath == "m_Script") continue;
+            if (sb.Length > 0) sb.Append(", ");
+            sb.Append(it.propertyPath).Append('=').Append(FormatProperty(it));
+            if (sb.Length > 3000) { sb.Append(", ..."); break; }
+        }
+        return sb.ToString();
+#else
+        return c is MonoBehaviour ? JsonUtility.ToJson(c) : "";
+#endif
+    }
+
+#if UNITY_EDITOR
+    static string FormatProperty(UnityEditor.SerializedProperty p)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        switch (p.propertyType)
+        {
+            case UnityEditor.SerializedPropertyType.Integer: return p.longValue.ToString(inv);
+            case UnityEditor.SerializedPropertyType.Boolean: return p.boolValue ? "true" : "false";
+            case UnityEditor.SerializedPropertyType.Float: return p.floatValue.ToString("0.###", inv);
+            case UnityEditor.SerializedPropertyType.String:
+                string s = p.stringValue ?? "";
+                return "\"" + (s.Length > 80 ? s.Substring(0, 77) + "..." : s) + "\"";
+            case UnityEditor.SerializedPropertyType.Color: return p.colorValue.ToString();
+            case UnityEditor.SerializedPropertyType.LayerMask: return p.intValue.ToString(inv);
+            case UnityEditor.SerializedPropertyType.Enum:
+                string[] names = p.enumDisplayNames;
+                return p.enumValueIndex >= 0 && p.enumValueIndex < names.Length ? names[p.enumValueIndex] : p.intValue.ToString(inv);
+            case UnityEditor.SerializedPropertyType.Vector2: return p.vector2Value.ToString();
+            case UnityEditor.SerializedPropertyType.Vector3: return p.vector3Value.ToString();
+            case UnityEditor.SerializedPropertyType.Vector4: return p.vector4Value.ToString();
+            case UnityEditor.SerializedPropertyType.Vector2Int: return p.vector2IntValue.ToString();
+            case UnityEditor.SerializedPropertyType.Vector3Int: return p.vector3IntValue.ToString();
+            case UnityEditor.SerializedPropertyType.Rect: return p.rectValue.ToString();
+            case UnityEditor.SerializedPropertyType.Bounds: return p.boundsValue.ToString();
+            case UnityEditor.SerializedPropertyType.Quaternion: return "euler" + p.quaternionValue.eulerAngles.ToString();
+            case UnityEditor.SerializedPropertyType.ObjectReference:
+                Object o = p.objectReferenceValue;
+                return o != null ? $"{o.name} ({o.GetType().Name})" : "null";
+            case UnityEditor.SerializedPropertyType.ArraySize: return p.intValue.ToString(inv);
+            default:
+                return p.isArray ? $"[{p.arraySize} items]" : "{...}";
+        }
+    }
+#endif
 
     void SendPrompt()
     {
@@ -260,6 +352,7 @@ public class MouseHandler : MonoBehaviour
             selectedComponents = selectedComponents.FindAll(c => c != null)
                 .ConvertAll(c => $"{c.GetType().Name} on '{HierarchyPath(c.transform)}'").ToArray(),
         };
+        CaptureLiveState(payload, selectedComponents.FindAll(c => c != null));
 
         StartCoroutine(PostToPi(JsonUtility.ToJson(payload)));
     }
@@ -279,6 +372,11 @@ public class MouseHandler : MonoBehaviour
         }
         if (payload == null) payload = new PromptPayload { scene = gameObject.scene.name };
         payload.prompt = text;
+        // The saved context is from the earlier prompt; refresh field values and play state.
+        var comps = new List<Component>();
+        if (payload.selectedComponents != null)
+            foreach (string label in payload.selectedComponents) comps.Add(ResolveComponent(label));
+        CaptureLiveState(payload, comps);
         Debug.Log("Follow-up prompt: " + text);
         StartCoroutine(PostToPi(JsonUtility.ToJson(payload)));
     }
@@ -316,6 +414,9 @@ public class MouseHandler : MonoBehaviour
 
     void CloseMenu()
     {
+        // The prompt box stops being drawn, but IMGUI keeps its keyboard focus; drop it so
+        // ability hotkeys don't stay blocked by an invisible text box.
+        if (menuOpen) GUIUtility.keyboardControl = 0;
         menuOpen = false;
         menuTarget = null;
         pressedIndex = -1;
@@ -332,20 +433,67 @@ public class MouseHandler : MonoBehaviour
 
     Rect MenuRect() => new Rect(menuPos, MenuSize());
 
+    Vector2 CollapsedPromptSize() => new Vector2(MenuSize().x, promptHeight);
+
+    /// <summary>Size the prompt box is animating toward: menu width, height fits the wrapped text.</summary>
+    Vector2 TargetPromptSize()
+    {
+        Vector2 collapsed = CollapsedPromptSize();
+        if (string.IsNullOrEmpty(prompt) || promptStyle == null) return collapsed;
+        float w = collapsed.x; // width stays matched to the menu; only height grows
+        float h = promptStyle.CalcHeight(new GUIContent(prompt), w);
+        return new Vector2(w, Mathf.Clamp(h, promptHeight, Mathf.Max(promptHeight, promptMaxHeight)));
+    }
+
+    /// <summary>Eases promptSize toward its target. Called once per frame (unscaled time: the game is paused).</summary>
+    void StepPromptSize()
+    {
+        Vector2 target = TargetPromptSize();
+        if (promptSize.x <= 0f) promptSize = CollapsedPromptSize();
+        float k = 1f - Mathf.Exp(-promptExpandSpeed * Time.unscaledDeltaTime);
+        promptSize = Vector2.Lerp(promptSize, target, k);
+        if ((promptSize - target).sqrMagnitude < 0.01f) promptSize = target;
+    }
+
+    /// <summary>Prompt box sits above the menu; its bottom edge is anchored so it grows upward.</summary>
     Rect PromptRect()
     {
         Rect menu = MenuRect();
-        return new Rect(menu.x, menu.yMax + promptGap, menu.width, promptHeight);
+        Vector2 s = promptSize.x > 0f ? promptSize : CollapsedPromptSize();
+        float x = Mathf.Clamp(menu.x, 0f, Mathf.Max(0f, PiUISprites.GuiWidth - s.x));
+        float y = Mathf.Max(0f, menu.y - promptGap - s.y);
+        return new Rect(x, y, s.x, s.y);
     }
 
-    /// <summary>Menu + gap + prompt box.</summary>
-    Vector2 PanelSize()
+    /// <summary>True if the point is over the menu or the prompt box.</summary>
+    bool PanelContains(Vector2 p) => MenuRect().Contains(p) || PromptRect().Contains(p);
+
+    /// <summary>
+    /// Draws a squircle of any size by 9-slicing a fixed corner mask, so an animating
+    /// size doesn't regenerate the mask texture every frame.
+    /// </summary>
+    void DrawSquircle(Rect rect, Color color)
     {
-        Vector2 m = MenuSize();
-        return new Vector2(m.x, m.y + promptGap + promptHeight);
+        promptMask.Ensure(new Vector2(cornerRadius * 2f, cornerRadius * 2f), cornerRadius, squircleExponent);
+        Texture tex = promptMask.Texture;
+        float r = Mathf.Min(cornerRadius, rect.width * 0.5f, rect.height * 0.5f);
+        float[] xs = { rect.x, rect.x + r, rect.xMax - r };
+        float[] ws = { r, rect.width - 2f * r, r };
+        float[] us = { 0f, 0.5f, 0.5f };
+        float[] uw = { 0.5f, 0f, 0.5f };
+        float[] ys = { rect.y, rect.y + r, rect.yMax - r };
+        float[] hs = { r, rect.height - 2f * r, r };
+        float[] vs = { 0.5f, 0.5f, 0f }; // texture UVs are bottom-up
+        float[] vh = { 0.5f, 0f, 0.5f };
+        GUI.color = color;
+        for (int row = 0; row < 3; row++)
+            for (int col = 0; col < 3; col++)
+            {
+                if (ws[col] <= 0f || hs[row] <= 0f) continue;
+                GUI.DrawTextureWithTexCoords(new Rect(xs[col], ys[row], ws[col], hs[row]), tex,
+                    new Rect(us[col], vs[row], uw[col], vh[row]));
+            }
     }
-
-    Rect PanelRect() => new Rect(menuPos, PanelSize());
 
     void SubmitPrompt()
     {
@@ -368,20 +516,25 @@ public class MouseHandler : MonoBehaviour
         Matrix4x4 prevMatrix = GUI.matrix;
         GUI.matrix = PiUISprites.GuiMatrix; // sizes below are reference pixels
 
+        EnsureStyle();
+        Event e = Event.current;
+        if (e.type == EventType.Layout && promptAnimFrame != Time.frameCount)
+        {
+            promptAnimFrame = Time.frameCount;
+            StepPromptSize();
+        }
+
         Rect menu = MenuRect();
         Rect promptRect = PromptRect();
         menuMask.Ensure(menu.size, cornerRadius, squircleExponent);
-        promptMask.Ensure(promptRect.size, cornerRadius, squircleExponent);
-        EnsureStyle();
 
-        Event e = Event.current;
         Vector2 mouse = e.mousePosition;
         Color prevColor = GUI.color;
 
         // Soft drop shadow.
         GUI.color = shadowColor;
         GUI.DrawTexture(new Rect(menu.x, menu.y + 3f, menu.width, menu.height), menuMask.Texture);
-        GUI.DrawTexture(new Rect(promptRect.x, promptRect.y + 3f, promptRect.width, promptRect.height), promptMask.Texture);
+        DrawSquircle(new Rect(promptRect.x, promptRect.y + 3f, promptRect.width, promptRect.height), shadowColor);
 
         // Segments: each one is the matching slice of the single squircle mask.
         for (int i = 0; i < options.Count; i++)
@@ -446,9 +599,11 @@ public class MouseHandler : MonoBehaviour
 
     void DrawPrompt(Rect rect, Event e)
     {
-        GUI.color = promptBackgroundColor;
-        GUI.DrawTexture(rect, promptMask.Texture);
+        DrawSquircle(rect, promptBackgroundColor);
         GUI.color = Color.white;
+
+        // Block game hotkeys while the prompt has focus (or is about to get it on open).
+        if (focusPromptNext || GUI.GetNameOfFocusedControl() == PromptControl) PiUISprites.MarkTyping();
 
         // Enter submits. Handle before the TextField so it can't swallow the key.
         if (e.type == EventType.KeyDown && GUI.GetNameOfFocusedControl() == PromptControl)
@@ -468,7 +623,8 @@ public class MouseHandler : MonoBehaviour
         GUI.skin.settings.cursorColor = textColor;
 
         GUI.SetNextControlName(PromptControl);
-        prompt = GUI.TextField(rect, prompt ?? "", promptStyle);
+        // TextArea so long prompts wrap onto new lines; Enter is intercepted above, so no newlines get in.
+        prompt = GUI.TextArea(rect, prompt ?? "", promptStyle);
 
         GUI.skin.settings.cursorColor = prevCursor;
 
@@ -507,16 +663,18 @@ public class MouseHandler : MonoBehaviour
         };
 
         // Borderless text field: the squircle behind it is the background.
-        promptStyle = new GUIStyle(GUI.skin.textField)
+        promptStyle = new GUIStyle(GUI.skin.textArea)
         {
-            alignment = TextAnchor.MiddleLeft,
+            alignment = TextAnchor.UpperLeft,
             fontSize = fontSize,
-            wordWrap = false,
+            wordWrap = true,
             clipping = TextClipping.Clip,
-            padding = new RectOffset(16, 16, 0, 0),
             border = new RectOffset(0, 0, 0, 0),
             margin = new RectOffset(0, 0, 0, 0),
         };
+        // Vertical padding centres a single line in the collapsed box; wrapped lines make the box taller.
+        int vPad = Mathf.Max(0, Mathf.RoundToInt((promptHeight - promptStyle.lineHeight) * 0.5f));
+        promptStyle.padding = new RectOffset(16, 16, vPad, vPad);
         foreach (GUIStyleState s in new[] { promptStyle.normal, promptStyle.hover, promptStyle.active, promptStyle.focused,
                                              promptStyle.onNormal, promptStyle.onHover, promptStyle.onActive, promptStyle.onFocused })
         {

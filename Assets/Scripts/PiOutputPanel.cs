@@ -439,6 +439,7 @@ public class PiOutputPanel : MonoBehaviour
         EnsureFollowUpStyles();
         Event e = Event.current;
         bool focused = GUI.GetNameOfFocusedControl() == FollowUpControl;
+        if (focused) PiUISprites.MarkTyping(); // blocks game hotkeys while typing here
 
         // Background + focus ring.
         if (followUpMask == null) followUpMask = new MouseHandler.SquircleMask();

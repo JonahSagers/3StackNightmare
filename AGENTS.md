@@ -13,6 +13,10 @@ Unity 6 project (`SampleScene`), new Input System only, URP. Unity is controlled
 - **Don't use input-simulation commands for testing** (`simulate_key`, `simulate_pointer`, or other keystroke/mouse MCP commands). They drive the user's live game session. Test through `eval` instead (call methods and set state directly), or ask the user to try it in-game.
 - **`eval` can't see Hot Reload changes in Play mode:** it compiles against the assembly loaded when Play mode started, so methods/overloads/fields added by Hot Reload don't exist for it (CS1501 / CS1061 errors). Test new code through existing entry points, or after exiting Play mode.
 
+## Agent sandbox limits (enforced by `.pi/extensions/unity-eval-guard.ts`)
+- **No LINQ and no Reflection in agent-run C#**: `script_eval` / `eval` (inline `code` or `file`), `script_run`, and `unity cmd script eval|run` from bash, plus `write`/`edit` of `.cs` files (blocked only when the change adds new LINQ/Reflection usages; existing ones don't block unrelated edits). That rules out `System.Linq`, LINQ extension methods (`.Where(`, `.Select(x => ...)`, `.Any(`, `.First(`, `.ToList(`, ...), query syntax, `System.Reflection`, `BindingFlags`, `*Info` types, `GetField/GetMethod/GetProperty...`, `Assembly`, `Activator`, `Type.GetType(string)`, `TypeCache`, and `dynamic`. Calls that use them are blocked before they run.
+- Use plain `for`/`foreach` loops, `List<T>` methods, and direct Unity APIs (`FindObjectsByType`, `GetComponent`, `SerializedObject`) instead.
+
 ## Hot Reload workflow (com.singularitygroup.hotreload)
 
 Script edits must take effect immediately, including during Play mode. Hot Reload patches code when `.cs` files are saved to disk.
@@ -34,8 +38,8 @@ Script edits must take effect immediately, including during Play mode. Hot Reloa
 - **When the pipeline server is unreachable**, Unity is reloading (domain reload / entering Play mode); wait a few seconds and retry instead of reporting failure.
 
 ### Don't
-- **Don't force a recompile in the middle of a task.** Don't recompile after each script edit; let Hot Reload patch while you work.
-- **Do force a domain reload once you've finished all changes** for a request: run `unity recompile` (or `mcp__unity__recompile`). This guarantees every change is actually loaded, including ones Hot Reload couldn't apply (new classes, blocked patches). Then wait for the pipeline server to come back ("Cannot connect" means it's still reloading, so retry). Check `unity cmd console get --level error` for compile errors and fix them before reporting done. If Play mode is active, warn the user that the reload may reset the running game's state.
+- **Never force a recompile or domain reload.** Don't run `unity recompile` / `mcp__unity__recompile`, not after each edit and not at the end of a task. Let Hot Reload patch the changes.
+- **When you've finished all changes**, check `unity cmd console get --level error` and look for `[HotReload]` errors or "Unsupported change" warnings. Fix any errors before reporting done. If some change can't be hot-patched (new classes, blocked patches), tell the user it will apply on the next recompile (e.g. when Play mode exits).
 - **Don't change these editor settings** (Hot Reload manages them): Unity Auto Refresh = off, Script Changes While Playing = Recompile After Finished Playing, Hot Reload "Auto recompile unsupported changes" = on exit Play mode.
 
 ### Scene/object changes vs. code changes

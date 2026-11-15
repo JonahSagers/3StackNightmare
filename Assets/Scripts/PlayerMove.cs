@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 // Attach to the Player. Right-click anywhere on the ground and the player walks there.
-public class ClickToMove : MonoBehaviour
+public class PlayerMove : MonoBehaviour
 {
     [Tooltip("Units per second.")]
     public float moveSpeed = 5f;

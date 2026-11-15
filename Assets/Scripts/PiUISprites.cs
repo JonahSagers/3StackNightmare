@@ -22,6 +22,22 @@ public static class PiUISprites
     /// <summary>Real pixels per reference pixel.</summary>
     public static float GuiScale => Mathf.Max(0.01f, Screen.height / GuiReferenceHeight);
 
+    static int lastTypingFrame = -10;
+
+    /// <summary>
+    /// Called from OnGUI by text boxes while they have keyboard focus. GUIUtility.keyboardControl
+    /// isn't reliable outside OnGUI (in the editor it can report another GUI view's state), so
+    /// focus is recorded here and read by game code in Update.
+    /// </summary>
+    public static void MarkTyping() => lastTypingFrame = Time.frameCount;
+
+    /// <summary>
+    /// True while an IMGUI text box (prompt box, pi follow-up box) has keyboard focus.
+    /// Game hotkeys (abilities, pause, ability-bar highlights) should ignore key presses while this is true.
+    /// Update runs before OnGUI, so last frame's mark counts.
+    /// </summary>
+    public static bool IsTyping => Time.frameCount - lastTypingFrame <= 1;
+
     /// <summary>Screen size in reference pixels (the GUI coordinate space while <see cref="GuiMatrix"/> is applied).</summary>
     public static float GuiWidth => Screen.width / GuiScale;
     public static float GuiHeight => Screen.height / GuiScale;

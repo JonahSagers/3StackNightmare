@@ -49,6 +49,7 @@ public class Skillshot : MonoBehaviour
     {
         var keyboard = Keyboard.current;
         if (keyboard == null || !keyboard[key].wasPressedThisFrame) return;
+        if (PiUISprites.IsTyping) return; // key went to a text box
         if (Time.time < nextReadyTime) return;
 
         Vector3 direction = GetAimDirection();

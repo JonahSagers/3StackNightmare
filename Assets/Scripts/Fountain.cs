@@ -44,7 +44,7 @@ public class Fountain : MonoBehaviour
     {
         if (player == null)
         {
-            var mover = FindAnyObjectByType<ClickToMove>();
+            var mover = FindAnyObjectByType<PlayerMove>();
             if (mover == null) return;
             player = mover.GetComponent<Health>();
             if (player == null) return;
