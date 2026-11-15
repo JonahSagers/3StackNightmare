@@ -16,6 +16,7 @@ Unity 6 project (`SampleScene`), new Input System only, URP. Unity is controlled
 ## Agent sandbox limits (enforced by `.pi/extensions/unity-eval-guard.ts`)
 - **No LINQ and no Reflection in agent-run C#**: `script_eval` (inline `code` or `file`), `script_run`, and `unity cmd script eval|run` from bash, plus `write`/`edit` of `.cs` files (blocked only when the change adds new LINQ/Reflection usages; existing ones don't block unrelated edits). That rules out `System.Linq`, LINQ extension methods (`.Where(`, `.Select(x => ...)`, `.Any(`, `.First(`, `.ToList(`, ...), query syntax, `System.Reflection`, `BindingFlags`, `*Info` types, `GetField/GetMethod/GetProperty...`, `Assembly`, `Activator`, `Type.GetType(string)`, `TypeCache`, and `dynamic`. Calls that use them are blocked before they run.
 - Use plain `for`/`foreach` loops, `List<T>` methods, and direct Unity APIs (`FindObjectsByType`, `GetComponent`, `SerializedObject`) instead.
+- **No looking at test cases while working on a `[Unity]` prompt** (enforced by `.pi/extensions/test-source-guard.ts`): `Assets/Tests/`, `Assets/Scripts/Regression/`, and `Assets/Editor/Regression*.cs` can't be read, searched, or edited, and test-source lines are stripped from search output. Test output is fine: run the checks (`script_eval` with `RegressionSuite.Run(name)` over `RegressionSuite.Names()`, or `test_run`) and read the results, the console, or `Library/RegressionStatus/`. Prompts typed directly into pi aren't restricted.
 
 ## Hot Reload workflow (com.singularitygroup.hotreload)
 
@@ -48,3 +49,26 @@ Hot Reload only patches code. Changes to GameObjects, components, or serialized 
 ## Verified behavior
 - `script_eval` and `scene_get_hierarchy` still respond (in under 1s) in Play mode after a `.cs` file has changed. The old AI Assistant `Unity_RunCommand` timeout problem is gone.
 - `unity cmd list` is not a valid command (it's ambiguous). Use `unity cmd <group> --help` or `pipeline_list_commands`.
+
+## Game rules (the regression checks and the reviewer agent enforce these)
+Changing one of these is a *rule change*: only do it if the user explicitly asks, and say so.
+- **Teams:** the Player and Friendly/Teammate objects are Ally; anything named Enemy is Enemy. Code never changes a character's team at runtime.
+- **Q (damage skillshot)** hurts Enemy-team targets only; it passes through allies and never hurts the caster.
+- **W (heal skillshot)** heals Ally-team targets only; it passes through enemies.
+- **Auto attacks** can only target living enemies. **Leap slam (E)** damages and knocks back living enemies only.
+- **Enemy shooter shots** hit the player (their target) and allies, never other enemies or the dead.
+- **Every damage/heal/shield source** goes through a team rule. A new source must check teams like the existing ones (`SkillshotProjectile.Affects`, `EnemyProjectile.ShouldHit`, `AutoAttack.CanTarget`, `LeapSlam.ShouldHit`).
+- **Health** never goes below 0 or above max. At 0 the character is dead: it can't be healed, can't act, and respawns after its delay with full health.
+- **Shield (R)** absorbs damage before health and expires after its duration; it doesn't last forever or stack without limit.
+- **Ally decay:** only allies drain back down to Starting Health, after a pause following the last heal. Enemies never decay.
+- **Keys:** Q = damage shot, W = heal shot, E = leap, R = shield, H = full heal; no two abilities share a key.
+- **Values stay sane:** speeds/ranges/radii/intervals/durations above 0; damage, heal and shield amounts not negative; cooldowns not negative.
+- **Movement** stays inside the lane/ground bounds (player, leap landings, knockback).
+
+## Regression checks (separate reviewer agent)
+- **Checks:** `Assets/Scripts/Regression/RegressionSuite.cs` holds the game-rule checks (damage, healing, death, shields, ally decay, who Q/W/enemy shots can hit). They're plain C#, so they run in Play mode and Edit mode. Run them with script eval `return RegressionReporter.RunAll();`: they go one at a time (shown live in the in-game panel and Window > Regression Monitor), then the balance diff runs. Results: `Library/RegressionStatus/tests.txt` and `balance.txt`. `Assets/Tests/Editor/GameRulesTests.cs` wraps the same checks for the Test Runner.
+- **Balance diff:** `BalanceSnapshot.SaveBaseline()` / `BalanceSnapshot.Compare()` (Assets/Editor/BalanceSnapshot.cs) record and diff every serialized field of scripts in `Assets/Scripts` on objects in the open scene.
+- **Regression gate:** `.pi/extensions/regression-gate.ts` asks Unity (via `Library/RegressionStatus/request.txt`, watched by RegressionReporter) to save a balance baseline when each request starts, backs up every game file before you edit it (`.pi/regression-backups/<run>/manifest.txt`), and when you finish asks Unity to run the checks + balance diff (a few seconds, no AI). All passed -> PASS immediately. Any failure (or Unity not answering) -> a **separate reviewer agent** (second pi process, `PI_REGRESSION_REVIEWER=1`) decides whether to revert from the backups. Progress (6 steps) and verdict: `Library/RegressionStatus/review.txt`; reviewer output: `reviewer-log.txt`. The editing agent doesn't need to run the checks itself.
+- **If you are the reviewer** (`PI_REGRESSION_REVIEWER` is set): only verify; never add features or tweak the change. Revert only from the listed backups, and end with the `VERDICT:` line you were asked for.
+- **The editing agent can't change the regression checks or tools** (Assets/Scripts/Regression, Assets/Tests, the Regression/Balance editor scripts, regression-gate.ts): edits are blocked by the gate. Make only the gameplay change; if it breaks a check, the gate flags it and the user or the reviewer agent decides whether the rule should change.
+- Keep game rules in small public methods (`Health.Tick`, `Health.ResetToStart`, `SkillshotProjectile.Affects`, `EnemyProjectile.ShouldHit`) so the checks can call them directly; no Reflection (blocked by unity-eval-guard).

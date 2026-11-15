@@ -22,6 +22,14 @@ public class EnemyProjectile : MonoBehaviour
         this.radius = radius;
     }
 
+    // Hit the shooter's target no matter what team it's set to, plus any ally in the way.
+    public static bool ShouldHit(Health health, Transform target)
+    {
+        if (health == null || health.IsDead) return false;
+        bool isTarget = target != null && health.transform == target;
+        return isTarget || health.team == Team.Ally;
+    }
+
     void Update()
     {
         float step = speed * Time.deltaTime;
@@ -31,17 +39,20 @@ public class EnemyProjectile : MonoBehaviour
         foreach (Collider hit in Physics.OverlapSphere(transform.position, radius))
         {
             Health health = hit.GetComponentInParent<Health>();
-            if (health == null || health.IsDead) continue;
-
-            // Hit the shooter's target no matter what team it's set to, plus any ally in the way.
-            bool isTarget = target != null && health.transform == target;
-            if (!isTarget && health.team != Team.Ally) continue;
+            if (!ShouldHit(health, target)) continue;
 
             health.TakeDamage(damage);
-            Destroy(gameObject);
+            Despawn();
             return;
         }
 
-        if (travelled >= maxDistance) Destroy(gameObject);
+        if (travelled >= maxDistance) Despawn();
+    }
+
+    // Destroy only works in Play mode; the regression checks also fire shots in Edit mode.
+    void Despawn()
+    {
+        if (Application.isPlaying) Destroy(gameObject);
+        else DestroyImmediate(gameObject);
     }
 }

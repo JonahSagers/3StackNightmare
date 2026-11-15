@@ -27,6 +27,9 @@ public class AutoAttack : MonoBehaviour
         mover = GetComponent<PlayerMove>();
     }
 
+    // The targeting rule (kept in one place so the regression checks can test it): only living enemies.
+    public static bool CanTarget(Health health) => health != null && health.team == Team.Enemy && !health.IsDead;
+
     // Called by PlayerMove on right-click. Returns true if the click landed on an enemy.
     public bool TryTargetUnderMouse(Ray ray)
     {
@@ -38,7 +41,7 @@ public class AutoAttack : MonoBehaviour
             if (hit.transform.IsChildOf(transform)) continue; // ignore ourselves
 
             Health health = hit.collider.GetComponentInParent<Health>();
-            if (health != null && health.team == Team.Enemy && !health.IsDead)
+            if (CanTarget(health))
             {
                 target = health;
                 return true;
