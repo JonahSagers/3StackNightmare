@@ -310,7 +310,7 @@ public class PiOutputPanel : MonoBehaviour
     bool DrawHeader(Rect h)
     {
         // Brand badge.
-        Rect badge = new Rect(h.x, h.center.y - 14f, 28f, 28f);
+        Rect badge = new Rect(h.x, h.center.y - 14f, 40f, 28f);
         PiUISprites.DrawRounded(badge, 8, accentColor);
         GUI.Label(badge, "pi", titleStyle);
 
