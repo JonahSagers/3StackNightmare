@@ -325,6 +325,9 @@ public class MouseHandler : MonoBehaviour
 
     void CloseMenu()
     {
+        // The prompt box stops being drawn, but IMGUI keeps its keyboard focus; drop it so
+        // ability hotkeys don't stay blocked by an invisible text box.
+        if (menuOpen) GUIUtility.keyboardControl = 0;
         menuOpen = false;
         menuTarget = null;
         pressedIndex = -1;
@@ -509,6 +512,9 @@ public class MouseHandler : MonoBehaviour
     {
         DrawSquircle(rect, promptBackgroundColor);
         GUI.color = Color.white;
+
+        // Block game hotkeys while the prompt has focus (or is about to get it on open).
+        if (focusPromptNext || GUI.GetNameOfFocusedControl() == PromptControl) PiUISprites.MarkTyping();
 
         // Enter submits. Handle before the TextField so it can't swallow the key.
         if (e.type == EventType.KeyDown && GUI.GetNameOfFocusedControl() == PromptControl)

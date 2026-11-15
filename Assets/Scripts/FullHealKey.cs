@@ -35,6 +35,7 @@ public class FullHealKey : MonoBehaviour
     {
         var keyboard = Keyboard.current;
         if (keyboard == null || !keyboard[key].wasPressedThisFrame) return;
+        if (PiUISprites.IsTyping) return; // key went to a text box
         if (health.IsDead || Time.time < nextReadyTime) return; // dead players wait for the respawn
 
         health.Heal(health.maxHealth); // Heal caps at max, so this tops you off

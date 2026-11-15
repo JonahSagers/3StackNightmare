@@ -36,7 +36,7 @@ public class ShieldAbility : MonoBehaviour
     void Update()
     {
         var keyboard = Keyboard.current;
-        if (keyboard != null && keyboard[key].wasPressedThisFrame && GUIUtility.keyboardControl == 0 && Time.time >= nextReadyTime && !health.IsDead)
+        if (keyboard != null && keyboard[key].wasPressedThisFrame && !PiUISprites.IsTyping && Time.time >= nextReadyTime && !health.IsDead)
         {
             health.AddShield(shieldAmount, duration);
             nextReadyTime = Time.time + cooldown;

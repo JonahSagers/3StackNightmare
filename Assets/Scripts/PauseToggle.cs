@@ -46,7 +46,7 @@ public class PauseToggle : MonoBehaviour
     {
         var kb = Keyboard.current;
         // Ignore space while typing into an IMGUI text field (e.g. the prompt box).
-        if (kb != null && kb.spaceKey.wasPressedThisFrame && GUIUtility.keyboardControl == 0)
+        if (kb != null && kb.spaceKey.wasPressedThisFrame && !PiUISprites.IsTyping)
         {
             IsPaused = !IsPaused;
             Time.timeScale = IsPaused ? 0f : 1f;
