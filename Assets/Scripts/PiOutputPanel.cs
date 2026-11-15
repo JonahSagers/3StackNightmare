@@ -68,6 +68,7 @@ public class PiOutputPanel : MonoBehaviour
     {
         public BlockKind kind;
         public bool failed; // tool blocks only
+        public string[] files; // non-null = "files changed" puck: [0] = title, rest = one line per file
         public readonly StringBuilder text = new StringBuilder();
         string cached;
         public string Text => cached ?? (cached = text.ToString());
@@ -191,11 +192,12 @@ public class PiOutputPanel : MonoBehaviour
                 {
                     case "text": AppendText(c.text); break;
                     case "tool": AddBlock(BlockKind.Tool, c.text); break;
+                    case "files": AddFilesBlock(c.text); break;
                     case "user": AddBlock(BlockKind.Prompt, PromptLine(c.text)); break;
                     case "status": status = c.text; break;
                 }
             }
-            if (r.chunks.Length > 0) TrimToLimit();
+            if (r.chunks.Length > 0) { ExtractFileLists(); TrimToLimit(); }
         }
 
         lastSeq = Mathf.Max(lastSeq, r.seq);
@@ -236,6 +238,128 @@ public class PiOutputPanel : MonoBehaviour
         }
         b.text.Append(text);
         blocks.Add(b);
+    }
+
+    /// <summary>Adds a "files changed" puck. Text = title line, then one line per file.</summary>
+    void AddFilesBlock(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        var b = new Block { kind = BlockKind.Tool, files = text.Trim('\n').Split('\n') };
+        b.text.Append(text);
+        blocks.Add(b);
+    }
+
+    /// <summary>
+    /// Moves a "Files changed:" list written in reply text into a files puck, so it's never shown as plain text.
+    /// Only touches finished text blocks (not the one still streaming).
+    /// </summary>
+    void ExtractFileLists()
+    {
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            Block b = blocks[i];
+            if (b.kind != BlockKind.Text || b.files != null) continue;
+            if (i == blocks.Count - 1 && busy) continue; // still streaming
+
+            string[] lines = b.Text.Split('\n');
+            int header = -1;
+            for (int l = 0; l < lines.Length; l++)
+            {
+                string t = lines[l].Trim().Trim('*', '#', ' ', '_').TrimEnd(':').Trim();
+                if (t.Equals("Files changed", System.StringComparison.OrdinalIgnoreCase)) { header = l; break; }
+            }
+            if (header < 0) continue;
+
+            var files = new List<string> { "Files changed" };
+            int end = header + 1;
+            for (; end < lines.Length; end++)
+            {
+                string t = lines[end].Trim();
+                if (t.Length == 0) { if (files.Count > 1) break; continue; }
+                if (!(t.StartsWith("- ") || t.StartsWith("* ") || t.StartsWith("> "))) break;
+                files.Add(t.Substring(2).Replace("`", "").Replace("**", "").Trim());
+            }
+            if (files.Count < 2) continue;
+
+            // Text before the list stays; text after it (rare) becomes its own block.
+            var before = new StringBuilder();
+            for (int l = 0; l < header; l++) before.Append(lines[l]).Append('\n');
+            var after = new StringBuilder();
+            for (int l = end; l < lines.Length; l++) after.Append(lines[l]).Append('\n');
+
+            string beforeText = before.ToString().TrimEnd();
+            string afterText = after.ToString().Trim();
+            var puck = new Block { kind = BlockKind.Tool, files = files.ToArray() };
+            puck.text.Append(string.Join("\n", files));
+
+            int insert = i;
+            blocks.RemoveAt(i);
+            if (beforeText.Length > 0)
+            {
+                var tb = new Block { kind = BlockKind.Text };
+                tb.text.Append(beforeText);
+                blocks.Insert(insert++, tb);
+            }
+            // Skip if the bridge already added an identical puck right after this text.
+            bool duplicate = insert < blocks.Count && blocks[insert].files != null;
+            if (!duplicate) blocks.Insert(insert++, puck);
+            if (afterText.Length > 0)
+            {
+                var ta = new Block { kind = BlockKind.Text };
+                ta.text.Append(afterText);
+                blocks.Insert(insert++, ta);
+            }
+            i = insert - 1;
+        }
+    }
+
+    GUIStyle fileLineStyle, filesTitleStyle; // created lazily (see EnsureFileStyles)
+    const float FileLineIndent = 26f;
+
+    void EnsureFileStyles()
+    {
+        if (fileLineStyle != null && fileLineStyle.fontSize == toolStyle.fontSize) return;
+        fileLineStyle = new GUIStyle(toolNoWrapStyle) { padding = new RectOffset((int)FileLineIndent, 12, 2, 2), clipping = TextClipping.Clip };
+        fileLineStyle.normal.textColor = textColor;
+        filesTitleStyle = new GUIStyle(toolNoWrapStyle) { padding = new RectOffset(12, 12, 2, 2), fontStyle = FontStyle.Bold };
+        filesTitleStyle.normal.textColor = mutedColor;
+    }
+
+    Rect LayoutFiles(Block b, float contentW, float y)
+    {
+        EnsureFileStyles();
+        float w = filesTitleStyle.CalcSize(new GUIContent(b.files[0])).x;
+        float h = 8f + filesTitleStyle.CalcSize(new GUIContent(b.files[0])).y + 2f;
+        for (int i = 1; i < b.files.Length; i++)
+        {
+            Vector2 s = fileLineStyle.CalcSize(new GUIContent(b.files[i]));
+            w = Mathf.Max(w, s.x);
+            h += s.y;
+        }
+        return new Rect(0f, y, Mathf.Min(contentW, Mathf.Max(160f, w + 4f)), h + 8f);
+    }
+
+    void DrawFiles(Block b, Rect br)
+    {
+        EnsureFileStyles();
+        PiUISprites.DrawRounded(br, 10, surfaceColor);
+        PiUISprites.DrawRounded(new Rect(br.x, br.y + 8f, 3f, br.height - 16f), 1, new Color(accentColor.r, accentColor.g, accentColor.b, 0.8f));
+
+        float y = br.y + 8f;
+        float th = filesTitleStyle.CalcSize(new GUIContent(b.files[0])).y;
+        GUI.Label(new Rect(br.x, y, br.width, th), b.files[0], filesTitleStyle);
+        y += th + 2f;
+
+        for (int i = 1; i < b.files.Length; i++)
+        {
+            string line = b.files[i];
+            float lh = fileLineStyle.CalcSize(new GUIContent(line)).y;
+            bool none = line.StartsWith("No ");
+            Color dot = none ? mutedColor : line.StartsWith("Created") ? successColor : accentColor;
+            PiUISprites.DrawTinted(new Rect(br.x + 13f, y + lh * 0.5f - 3f, 6f, 6f), PiUISprites.Circle(12), dot);
+            GUI.Label(new Rect(br.x, y, br.width, lh), line, fileLineStyle);
+            y += lh;
+        }
     }
 
     void TrimToLimit()
@@ -387,6 +511,7 @@ public class PiOutputPanel : MonoBehaviour
 
     Rect LayoutBlock(Block b, float contentW, float y)
     {
+        if (b.files != null) return LayoutFiles(b, contentW, y);
         var content = new GUIContent(b.Text);
         switch (b.kind)
         {
@@ -411,6 +536,7 @@ public class PiOutputPanel : MonoBehaviour
 
     void DrawBlock(Block b, Rect br)
     {
+        if (b.files != null) { DrawFiles(b, br); return; }
         switch (b.kind)
         {
             case BlockKind.Prompt:
