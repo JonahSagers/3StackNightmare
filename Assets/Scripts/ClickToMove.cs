@@ -85,6 +85,8 @@ public class ClickToMove : MonoBehaviour
     // Keeps a position inside the ground's area (X and Z only; height is left alone).
     public Vector3 ClampToGround(Vector3 pos)
     {
+        // Stay between the lane walls when there's a lane.
+        if (Lane.Active != null) pos = Lane.Active.Clamp(pos, edgePadding);
         if (ground == null) return pos;
 
         Bounds b = ground.bounds;
