@@ -944,6 +944,8 @@ MonoBehaviour:
   promptPlaceholder: Type a prompt...
   promptHeight: 40
   promptGap: 8
+  promptMaxHeight: 160
+  promptExpandSpeed: 14
   promptBackgroundColor: {r: 0.15, g: 0.15, b: 0.18, a: 0.96}
   promptPlaceholderColor: {r: 1, g: 1, b: 1, a: 0.35}
   piBridgeUrl: http://127.0.0.1:7777/prompt
@@ -5917,6 +5919,7 @@ GameObject:
   - component: {fileID: 1222977596}
   - component: {fileID: 1222977595}
   - component: {fileID: 1222977594}
+  - component: {fileID: 1222977601}
   - component: {fileID: 1222977598}
   - component: {fileID: 1222977599}
   - component: {fileID: 1222977600}
@@ -6074,6 +6077,18 @@ MonoBehaviour:
   color: {r: 0, g: 1, b: 0.2, a: 1}
   width: 0.06
   visible: 0
+--- !u!114 &1222977601
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1222977593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f07c7e485ded4818a1f99348288de1f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TeammateAI
 --- !u!1 &1254988178
 GameObject:
   m_ObjectHideFlags: 0
@@ -10838,6 +10853,7 @@ GameObject:
   - component: {fileID: 1966940805}
   - component: {fileID: 1966940804}
   - component: {fileID: 1966940803}
+  - component: {fileID: 1966940810}
   - component: {fileID: 1966940807}
   - component: {fileID: 1966940808}
   - component: {fileID: 1966940809}
@@ -10995,6 +11011,18 @@ MonoBehaviour:
   color: {r: 1, g: 0, b: 0, a: 1}
   width: 0.06
   visible: 0
+--- !u!114 &1966940810
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1966940802}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57188b839eeb84ab6b72d5629f0c6b4d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyAI
 --- !u!1 &1972420820
 GameObject:
   m_ObjectHideFlags: 0
