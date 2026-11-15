@@ -35,6 +35,7 @@ public class Knockback : MonoBehaviour
 
     Vector3 KeepOnGround(Vector3 pos)
     {
+        if (Lane.Active != null) pos = Lane.Active.Clamp(pos); // can't be knocked through lane walls
         if (ground == null) return pos;
         Bounds b = ground.bounds;
         pos.x = Mathf.Clamp(pos.x, b.min.x + 0.5f, b.max.x - 0.5f);
