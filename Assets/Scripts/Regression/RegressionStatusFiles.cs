@@ -47,6 +47,22 @@ public static class RegressionStatusFiles
         Write("tests.txt", sb.ToString());
     }
 
+    /// <summary>Asks the editor (RegressionReporter) to undo the last agent change. Used by the in-game button.</summary>
+    public static void RequestUndo()
+    {
+        try
+        {
+            Directory.CreateDirectory(Folder);
+            File.AppendAllText(Path.Combine(Folder, "request.txt"), "undo\n");
+        }
+        catch (Exception e) { Debug.LogWarning($"Regression status: couldn't request undo ({e.Message})"); }
+    }
+
+    public static void WriteReview(string state, string text, long reviewStart, string manifest = "")
+    {
+        Write("review.txt", $"summary\t{Now()}\t{state}\t{Clean(text)}\t{reviewStart}\t{manifest}\n");
+    }
+
     // ---- Reading ---------------------------------------------------------------------
 
     public class Change { public string objectPath, field, oldValue, newValue; }
@@ -69,8 +85,12 @@ public static class RegressionStatusFiles
         // review.txt
         public long reviewTime, reviewStart;
         public string reviewState = "", reviewText = "";
+        public string reviewManifest = ""; // backups of the last agent change (for Undo)
 
-        public bool ReviewFinal => reviewState == "PASS" || reviewState == "FAIL" || reviewState == "REVERTED" || reviewState == "ERROR";
+        public bool ReviewFinal => reviewState == "PASS" || reviewState == "FAIL" || reviewState == "REVERTED" || reviewState == "ERROR" || reviewState == "INTERRUPTED";
+
+        /// <summary>The last agent change can be undone: review finished, backups exist, not already reverted.</summary>
+        public bool CanUndo => ReviewFinal && reviewState != "REVERTED" && reviewManifest.Length > 0;
     }
 
     static string[] Lines(string file)
@@ -134,6 +154,7 @@ public static class RegressionStatusFiles
             s.reviewState = f[2];
             s.reviewText = f[3];
             if (f.Length >= 5) long.TryParse(f[4], out s.reviewStart);
+            s.reviewManifest = f.Length >= 6 ? f[5].Trim() : "";
         }
 
         return s;

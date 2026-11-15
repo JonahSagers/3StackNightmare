@@ -142,13 +142,15 @@ export default function (pi: ExtensionAPI) {
 	const statusDir = () => path.join(cwd(), "Library", "RegressionStatus");
 	const now = () => Math.floor(Date.now() / 1000);
 
-	// review.txt: summary <time> <state> <text> <reviewStart>
-	// state: BASELINE | EDITING | RUNNING | PASS | FAIL | REVERTED | ERROR
+	// review.txt: summary <time> <state> <text> <reviewStart> <manifest>
+	// state: BASELINE | EDITING | RUNNING | REVIEWING | PASS | FAIL | REVERTED | ERROR | INTERRUPTED
+	// manifest: this request's backup list, so the panel's "Undo agent change" button can restore it.
 	const writeReview = (state: string, text: string) => {
 		try {
 			fs.mkdirSync(statusDir(), { recursive: true });
 			const clean = text.replace(/[\t\r\n]+/g, " ").trim();
-			fs.writeFileSync(path.join(statusDir(), "review.txt"), `summary\t${now()}\t${state}\t${clean}\t${reviewStart}\n`);
+			const manifest = backedUp.size > 0 ? path.relative(cwd(), path.join(runDir, "manifest.txt")) : "";
+			fs.writeFileSync(path.join(statusDir(), "review.txt"), `summary\t${now()}\t${state}\t${clean}\t${reviewStart}\t${manifest}\n`);
 		} catch {
 			/* status display only; never break the agent over it */
 		}
@@ -244,6 +246,16 @@ export default function (pi: ExtensionAPI) {
 				break;
 			}
 		}
+		// The person already pressed "Undo agent change": keep that, don't overwrite it with a late verdict.
+		try {
+			const current = fs.readFileSync(statusFile("review.txt"), "utf8").split("\t");
+			if (current[2] === "REVERTED" && (current[3] ?? "").startsWith("Undone by you")) {
+				notify(`Regression reviewer: ${verdict} - ${summary} (you already undid this change)`, "info");
+				return;
+			}
+		} catch {
+			/* no status yet */
+		}
 		// A background double-check that finishes after a newer request started: don't overwrite that request's status.
 		if (forRequest !== undefined && forRequest !== reviewStart) {
 			notify(`Regression reviewer (earlier request): ${verdict} - ${summary}`, verdict === "PASS" ? "info" : "warning");
@@ -260,6 +272,19 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		ctxRef = ctx;
+
+		// A review that was still in progress when pi last closed will never finish: say so instead of
+		// leaving the panel on "Checking..." forever. Its backups stay listed, so Undo still works.
+		try {
+			const f = fs.readFileSync(statusFile("review.txt"), "utf8").replace(/\r?\n$/, "").split("\t");
+			if (["BASELINE", "EDITING", "RUNNING", "REVIEWING"].includes(f[2] ?? "")) {
+				// INTERRUPTED is neutral: not a problem with the game (the checks re-run on their own), just no verdict.
+				const text = "Last review didn't finish (pi was closed or restarted)";
+				fs.writeFileSync(statusFile("review.txt"), `summary\t${now()}\tINTERRUPTED\t${text}\t${f[4] ?? 0}\t${f[5] ?? ""}\n`);
+			}
+		} catch {
+			/* no status yet */
+		}
 	});
 
 	pi.on("message_start", async (event) => {

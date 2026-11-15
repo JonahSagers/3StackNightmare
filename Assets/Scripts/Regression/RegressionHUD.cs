@@ -24,6 +24,7 @@ public class RegressionHUD : MonoBehaviour
         public string text;
         public Icon icon;
         public float bar;      // >= 0: draw a progress bar on this row (0..1)
+        public bool button;    // draw "text" as a clickable button (Undo)
         public Color barColor;
         public float indent;
     }
@@ -36,6 +37,7 @@ public class RegressionHUD : MonoBehaviour
     int liveChecksRun;
 
     bool expanded = true;
+    float undoRequestedAt = -100f; // shows "Undoing..." until the editor reports back
     bool listOpen;
     bool wasRunning;
     float listUntil;
@@ -174,7 +176,10 @@ public class RegressionHUD : MonoBehaviour
         return Severity.Ok;
     }
 
-    bool Working => snap.runActive || (snap.reviewState != "" && !snap.ReviewFinal);
+    // Longer than the reviewer's 15-minute timeout: nothing is really running anymore.
+    bool Stalled => snap.reviewState != "" && !snap.ReviewFinal && RegressionStatusFiles.Now() - snap.reviewTime > 16 * 60;
+
+    bool Working => snap.runActive || (snap.reviewState != "" && !snap.ReviewFinal && !Stalled);
 
     static Color ColorOf(Severity s) => s == Severity.Error ? ColError : s == Severity.Warning ? ColWarn : ColOk;
     static string Colored(string text, Color c) => $"<color=#{ColorUtility.ToHtmlStringRGB(c)}>{text}</color>";
@@ -205,7 +210,11 @@ public class RegressionHUD : MonoBehaviour
 
         // AGENT REVIEW: the reviewer pipeline, step by step
         RegressionStatusFiles.Pipeline(snap, out int step, out string stepLabel, out float pipelineProgress);
-        if (step > 0)
+        if (step > 0 && Stalled)
+        {
+            rows.Add(Text($"{Colored("AGENT REVIEW", ColDim)}  {Colored("stalled", ColWarn)}  {Colored("no update in over 15 min: press F5 to re-check", ColDim)}"));
+        }
+        else if (step > 0)
         {
             if (!snap.ReviewFinal)
             {
@@ -214,10 +223,18 @@ public class RegressionHUD : MonoBehaviour
             }
             else
             {
-                Color vc = ColorOf(ReviewSeverity());
-                rows.Add(Text($"{Colored("AGENT REVIEW", ColDim)}  {Colored(snap.reviewState, vc)}  {Colored(Ago(snap.reviewTime), ColDim)}"));
-                rows.Add(Bar(1f, vc));
+                bool interrupted = snap.reviewState == "INTERRUPTED";
+                Color vc = interrupted ? ColDim : ColorOf(ReviewSeverity());
+                rows.Add(Text($"{Colored("AGENT REVIEW", ColDim)}  {Colored(interrupted ? "interrupted" : snap.reviewState, vc)}  {Colored(Ago(snap.reviewTime), ColDim)}"));
+                if (!interrupted) rows.Add(Bar(1f, vc));
                 if (snap.reviewText.Length > 0) rows.Add(Text(Colored(Trim(snap.reviewText, 62), vc), 6f));
+
+                // Let a person undo the change: always available on FAIL/ERROR, and even after a PASS.
+                if (snap.CanUndo)
+                {
+                    bool waiting = Time.unscaledTime - undoRequestedAt < 5f;
+                    rows.Add(new Row { button = true, bar = -1f, text = waiting ? "Undoing..." : "Undo agent change" });
+                }
             }
         }
 
@@ -341,7 +358,7 @@ public class RegressionHUD : MonoBehaviour
 
         const float width = 500f, pad = 14f, headerH = 30f, lineH = 22f, barH = 12f, footerH = 22f;
         float contentH = 0f;
-        foreach (Row r in rows) contentH += r.text == null ? barH + 6f : lineH;
+        foreach (Row r in rows) contentH += r.button ? 36f : r.text == null ? barH + 6f : lineH;
         float height = pad * 2f + headerH + (expanded ? contentH + 8f + footerH : 0f);
         var panel = new Rect(PiUISprites.GuiWidth - width - 20f, 20f, width, height);
 
@@ -364,6 +381,21 @@ public class RegressionHUD : MonoBehaviour
         float x = panel.x + pad + 6f, y = panel.y + pad + headerH + 8f, inner = width - pad * 2f - 6f;
         foreach (Row r in rows)
         {
+            if (r.button)
+            {
+                var rect = new Rect(x + 6f, y + 4f, 210f, 28f);
+                bool urgent = snap.reviewState == "FAIL" || snap.reviewState == "ERROR";
+                bool hover = rect.Contains(Event.current.mousePosition);
+                PiUISprites.DrawRounded(rect, 8, urgent ? (hover ? new Color(1f, 0.45f, 0.45f) : ColError) : (hover ? new Color(1f, 1f, 1f, 0.25f) : new Color(1f, 1f, 1f, 0.15f)));
+                GUI.Label(rect, $"<b>{r.text}</b>", new GUIStyle(smallStyle) { alignment = TextAnchor.MiddleCenter });
+                if (GUI.Button(rect, GUIContent.none, GUIStyle.none) && Time.unscaledTime - undoRequestedAt > 5f)
+                {
+                    undoRequestedAt = Time.unscaledTime;
+                    RegressionStatusFiles.RequestUndo();
+                }
+                y += 36f;
+                continue;
+            }
             if (r.text == null)
             {
                 // progress bar row

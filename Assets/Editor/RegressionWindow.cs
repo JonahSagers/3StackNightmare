@@ -42,6 +42,10 @@ public class RegressionWindow : EditorWindow
             GUI.enabled = true;
             if (GUILayout.Button("Save Balance Baseline", GUILayout.Height(24))) BalanceSnapshot.SaveBaseline();
         }
+        GUI.enabled = snap.CanUndo;
+        if (GUILayout.Button(snap.CanUndo ? "Undo Last Agent Change" : "Undo Last Agent Change (nothing to undo)", GUILayout.Height(24)))
+            Debug.Log(RegressionReporter.UndoLastAgentChange());
+        GUI.enabled = true;
 
         // Agent review pipeline
         RegressionStatusFiles.Pipeline(snap, out int step, out string label, out float progress);
