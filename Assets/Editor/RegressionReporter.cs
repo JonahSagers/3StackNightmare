@@ -85,11 +85,11 @@ public static class RegressionReporter
     public static string UndoLastAgentChange()
     {
         RegressionStatusFiles.Snapshot snap = RegressionStatusFiles.Load();
-        if (!snap.CanUndo) return "Nothing to undo (no finished agent change with backups, or it was already reverted).";
+        if (!snap.CanUndo) return "Nothing to undo (no agent change with backups, or it was already reverted).";
 
         string root = Path.GetDirectoryName(Application.dataPath);
-        string manifest = Path.Combine(root, snap.reviewManifest);
-        if (!File.Exists(manifest)) return $"Can't undo: backup list not found ({snap.reviewManifest}).";
+        string manifest = Path.Combine(root, snap.undoManifest);
+        if (!File.Exists(manifest)) return $"Can't undo: backup list not found ({snap.undoManifest}).";
 
         int restored = 0, removed = 0;
         bool needsRecompile = false;

@@ -17,6 +17,14 @@ using UnityEngine.SceneManagement;
 public static class BalanceSnapshot
 {
     const string Folder = "Library/BalanceSnapshots";
+
+    // UI, camera and editor-tool scripts: their values aren't gameplay balance, and some (like the pi chat
+    // panel) only exist while open, which made them show up as "removed" after every request.
+    static readonly HashSet<string> NotBalance = new HashSet<string>
+    {
+        "PiOutputPanel", "MouseHandler", "PiUISprites", "PauseToggle", "AbilityBar",
+        "CameraFollow", "HealthBar", "Outline", "GroundRipple", "Knockback",
+    };
     static string BaselinePath => Path.Combine(Folder, "baseline.txt");
 
     [MenuItem("Tools/Balance Snapshot/Save Baseline")]
@@ -124,6 +132,8 @@ public static class BalanceSnapshot
         MonoScript script = MonoScript.FromMonoBehaviour(mb);
         string scriptPath = script != null ? AssetDatabase.GetAssetPath(script) : "";
         if (!scriptPath.StartsWith("Assets/Scripts/") || scriptPath.StartsWith("Assets/Scripts/Regression/")) return;
+
+        if (NotBalance.Contains(mb.GetType().Name)) return;
 
         string prefix = $"{PathOf(mb.transform)}/{ComponentLabel(mb)}";
         var so = new SerializedObject(mb);

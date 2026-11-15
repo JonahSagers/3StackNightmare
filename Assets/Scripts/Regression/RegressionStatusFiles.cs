@@ -89,8 +89,16 @@ public static class RegressionStatusFiles
 
         public bool ReviewFinal => reviewState == "PASS" || reviewState == "FAIL" || reviewState == "REVERTED" || reviewState == "ERROR" || reviewState == "INTERRUPTED";
 
-        /// <summary>The last agent change can be undone: review finished, backups exist, not already reverted.</summary>
-        public bool CanUndo => ReviewFinal && reviewState != "REVERTED" && reviewManifest.Length > 0;
+        /// <summary>Backup list of the last agent change (from the review, or the newest backup folder for it).</summary>
+        public string undoManifest = "";
+
+        /// <summary>Something failed (a check, or the reviewer's verdict).</summary>
+        public bool HasFailure => checksFailed > 0 || testsFailed > 0 || reviewState == "FAIL" || reviewState == "ERROR";
+
+        /// <summary>The last agent change can be undone: we have its backups and it isn't already reverted.
+        /// Available as soon as it fails (no need to wait for the reviewer), and also after a pass.</summary>
+        public bool CanUndo => undoManifest.Length > 0 && reviewState != "REVERTED" && reviewState != "" &&
+                               (HasFailure || ReviewFinal);
     }
 
     static string[] Lines(string file)
@@ -157,7 +165,31 @@ public static class RegressionStatusFiles
             s.reviewManifest = f.Length >= 6 ? f[5].Trim() : "";
         }
 
+        s.undoManifest = FindBackups(s);
         return s;
+    }
+
+    // The review's own backup list if it recorded one; otherwise the newest backup folder made for this
+    // request (the regression gate names folders by start time in milliseconds).
+    static string FindBackups(Snapshot s)
+    {
+        string root = Path.GetDirectoryName(Application.dataPath);
+        if (s.reviewManifest.Length > 0 && File.Exists(Path.Combine(root, s.reviewManifest))) return s.reviewManifest;
+
+        string dir = Path.Combine(root, ".pi", "regression-backups");
+        if (s.reviewStart <= 0 || !Directory.Exists(dir)) return "";
+        long best = 0;
+        try
+        {
+            foreach (string sub in Directory.GetDirectories(dir))
+            {
+                if (!long.TryParse(Path.GetFileName(sub), out long ms)) continue;
+                if (ms / 1000 < s.reviewStart - 5 || ms <= best) continue; // must belong to this request
+                if (File.Exists(Path.Combine(sub, "manifest.txt"))) best = ms;
+            }
+        }
+        catch (IOException) { return ""; }
+        return best > 0 ? Path.Combine(".pi", "regression-backups", best.ToString(), "manifest.txt") : "";
     }
 
     // ---- Reviewer pipeline steps (shared by the in-game panel and the editor window) ----------

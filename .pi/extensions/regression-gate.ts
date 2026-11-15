@@ -293,7 +293,10 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("agent_start", async () => {
-		if (reviewing) return;
+		if (reviewing) {
+			notify("Regression gate: the previous change is still being reviewed, so this request won't be checked. Press F5 afterward to re-check.", "warning");
+			return;
+		}
 		backedUp = new Map();
 		changedScene = false;
 		reviewStart = now();
@@ -302,12 +305,13 @@ export default function (pi: ExtensionAPI) {
 		// Step 1: "before" picture for the balance diff.
 		writeReview("BASELINE", "Saving balance baseline...");
 		const asked = now();
+		const requestId = reviewStart;
 		requestUnity("baseline");
-		const saved = await waitFor(() => summaryTime(statusFile("balance.txt")) >= asked, 10000);
-		if (!saved) notify("Regression gate: Unity didn't save a balance baseline (is the Editor open and not compiling?)", "warning");
-
-		// Step 2: the editing agent works.
-		writeReview("EDITING", "Editing agent is making the change...");
+		// Don't make pi wait: confirm the baseline in the background.
+		void waitFor(() => summaryTime(statusFile("balance.txt")) >= asked, 10000).then((saved) => {
+			if (!saved) notify("Regression gate: Unity didn't save a balance baseline (is the Editor open and not compiling?)", "warning");
+			if (reviewStart === requestId && !reviewing) writeReview("EDITING", "Editing agent is making the change...");
+		});
 	});
 
 	pi.on("tool_call", async (event) => {
@@ -343,8 +347,13 @@ export default function (pi: ExtensionAPI) {
 			writeReview("", ""); // nothing to review: clear the pipeline display
 			return;
 		}
-
+		// Run the review in the background: pi must never wait on the gate (otherwise new prompts queue up
+		// behind a multi-minute reviewer run and the Unity panel sits on "Waiting for pi...").
 		reviewing = true;
+		void review();
+	});
+
+	const review = async () => {
 		try {
 			const files = [...backedUp.keys()].map((f) => `- ${path.relative(cwd(), f)}`).join("\n") || "- (scene objects only, no file backups)";
 			const manifest = path.relative(cwd(), path.join(runDir, "manifest.txt"));
@@ -433,7 +442,7 @@ export default function (pi: ExtensionAPI) {
 		} finally {
 			reviewing = false;
 		}
-	});
+	};
 
 	pi.on("session_shutdown", async () => {
 		ctxRef = undefined;

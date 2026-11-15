@@ -229,12 +229,8 @@ public class RegressionHUD : MonoBehaviour
                 if (!interrupted) rows.Add(Bar(1f, vc));
                 if (snap.reviewText.Length > 0) rows.Add(Text(Colored(Trim(snap.reviewText, 62), vc), 6f));
 
-                // Let a person undo the change: always available on FAIL/ERROR, and even after a PASS.
-                if (snap.CanUndo)
-                {
-                    bool waiting = Time.unscaledTime - undoRequestedAt < 5f;
-                    rows.Add(new Row { button = true, bar = -1f, text = waiting ? "Undoing..." : "Undo agent change" });
-                }
+                // After a pass, still let a person undo a change they don't like (quiet grey button).
+                if (snap.CanUndo && !snap.HasFailure) rows.Add(UndoButton());
             }
         }
 
@@ -296,6 +292,9 @@ public class RegressionHUD : MonoBehaviour
                     rows.Add(new Row { text = Colored(Trim($"{r.name}: {r.message}", 60), ColError), icon = Icon.Fail, bar = -1f, indent = 6f });
         }
 
+        // Something failed: red Undo button right here, no need to wait for the reviewer agent.
+        if (snap.CanUndo && snap.HasFailure) rows.Add(UndoButton());
+
         // LIVE RULES
         if (liveIssues.Count == 0) rows.Add(Text($"{Colored("LIVE RULES", ColDim)}  {Colored($"{liveChecksRun} checks OK", ColOk)}"));
         else
@@ -319,6 +318,12 @@ public class RegressionHUD : MonoBehaviour
         }
 
         return rows;
+    }
+
+    Row UndoButton()
+    {
+        bool waiting = Time.unscaledTime - undoRequestedAt < 5f;
+        return new Row { button = true, bar = -1f, text = waiting ? "Undoing..." : "Undo agent change" };
     }
 
     // ---- Drawing ---------------------------------------------------------------------
@@ -384,7 +389,7 @@ public class RegressionHUD : MonoBehaviour
             if (r.button)
             {
                 var rect = new Rect(x + 6f, y + 4f, 210f, 28f);
-                bool urgent = snap.reviewState == "FAIL" || snap.reviewState == "ERROR";
+                bool urgent = snap.HasFailure;
                 bool hover = rect.Contains(Event.current.mousePosition);
                 PiUISprites.DrawRounded(rect, 8, urgent ? (hover ? new Color(1f, 0.45f, 0.45f) : ColError) : (hover ? new Color(1f, 1f, 1f, 0.25f) : new Color(1f, 1f, 1f, 0.15f)));
                 GUI.Label(rect, $"<b>{r.text}</b>", new GUIStyle(smallStyle) { alignment = TextAnchor.MiddleCenter });
