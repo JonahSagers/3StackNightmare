@@ -13,6 +13,10 @@ Unity 6 project (`SampleScene`), new Input System only, URP. Unity is controlled
 - **Don't use input-simulation commands for testing** (`simulate_key`, `simulate_pointer`, or other keystroke/mouse MCP commands). They drive the user's live game session. Test through `eval` instead (call methods and set state directly), or ask the user to try it in-game.
 - **`eval` can't see Hot Reload changes in Play mode:** it compiles against the assembly loaded when Play mode started, so methods/overloads/fields added by Hot Reload don't exist for it (CS1501 / CS1061 errors). Test new code through existing entry points, or after exiting Play mode.
 
+## Agent sandbox limits (enforced by `.pi/extensions/unity-eval-guard.ts`)
+- **No LINQ and no Reflection in agent-run C#**: `script_eval` / `eval` (inline `code` or `file`), `script_run`, and `unity cmd script eval|run` from bash, plus `write`/`edit` of `.cs` files (blocked only when the change adds new LINQ/Reflection usages; existing ones don't block unrelated edits). That rules out `System.Linq`, LINQ extension methods (`.Where(`, `.Select(x => ...)`, `.Any(`, `.First(`, `.ToList(`, ...), query syntax, `System.Reflection`, `BindingFlags`, `*Info` types, `GetField/GetMethod/GetProperty...`, `Assembly`, `Activator`, `Type.GetType(string)`, `TypeCache`, and `dynamic`. Calls that use them are blocked before they run.
+- Use plain `for`/`foreach` loops, `List<T>` methods, and direct Unity APIs (`FindObjectsByType`, `GetComponent`, `SerializedObject`) instead.
+
 ## Hot Reload workflow (com.singularitygroup.hotreload)
 
 Script edits must take effect immediately, including during Play mode. Hot Reload patches code when `.cs` files are saved to disk.
