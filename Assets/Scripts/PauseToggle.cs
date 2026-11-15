@@ -159,7 +159,7 @@ public class PauseToggle : MonoBehaviour
 
         // Ease-out so the border slides in quickly and settles.
         float eased = 1f - (1f - alpha) * (1f - alpha);
-        float t = borderThickness * eased, w = Screen.width, h = Screen.height;
+        float t = borderThickness * PiUISprites.GuiScale * eased, w = Screen.width, h = Screen.height;
         Texture tex = Texture2D.whiteTexture;
         GUI.DrawTexture(new Rect(0, 0, w, t), tex);         // top
         GUI.DrawTexture(new Rect(0, h - t, w, t), tex);     // bottom

@@ -172,7 +172,7 @@ public class MouseHandler : MonoBehaviour
 
         if (Mouse.current.leftButton.wasPressedThisFrame)
         {
-            Vector2 guiMouse = new Vector2(mousePos.x, Screen.height - mousePos.y);
+            Vector2 guiMouse = PiUISprites.ScreenToGUI(mousePos);
 
             // Clicks on the open menu are handled by OnGUI.
             if (menuOpen && PanelRect().Contains(guiMouse))
@@ -223,8 +223,8 @@ public class MouseHandler : MonoBehaviour
         Vector2 p = guiPos + cursorOffset;
         // Keep the menu on screen.
         menuPos = new Vector2(
-            Mathf.Clamp(p.x, 0f, Mathf.Max(0f, Screen.width - size.x)),
-            Mathf.Clamp(p.y, 0f, Mathf.Max(0f, Screen.height - size.y)));
+            Mathf.Clamp(p.x, 0f, Mathf.Max(0f, PiUISprites.GuiWidth - size.x)),
+            Mathf.Clamp(p.y, 0f, Mathf.Max(0f, PiUISprites.GuiHeight - size.y)));
         pressedIndex = -1;
         menuOpen = true;
         focusPromptNext = true;
@@ -365,6 +365,9 @@ public class MouseHandler : MonoBehaviour
         if (!menuOpen) return;
         if (menuTarget == null) { CloseMenu(); return; } // target was destroyed
 
+        Matrix4x4 prevMatrix = GUI.matrix;
+        GUI.matrix = PiUISprites.GuiMatrix; // sizes below are reference pixels
+
         Rect menu = MenuRect();
         Rect promptRect = PromptRect();
         menuMask.Ensure(menu.size, cornerRadius, squircleExponent);
@@ -438,6 +441,7 @@ public class MouseHandler : MonoBehaviour
         if (e.type == EventType.MouseMove || e.type == EventType.MouseDrag) e.Use(); // repaint hover
 
         GUI.color = prevColor;
+        GUI.matrix = prevMatrix;
     }
 
     void DrawPrompt(Rect rect, Event e)

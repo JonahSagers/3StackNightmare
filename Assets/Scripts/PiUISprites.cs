@@ -11,6 +11,28 @@ public static class PiUISprites
     static readonly Dictionary<string, Texture2D> cache = new Dictionary<string, Texture2D>();
     static readonly Dictionary<string, GUIStyle> nineSlices = new Dictionary<string, GUIStyle>();
 
+    // ---- Resolution-independent scaling ----------------------------------------------
+    // All OnGUI UI is authored in "reference pixels" for a GuiReferenceHeight-tall screen and scaled uniformly
+    // with screen height, so elements stay the same percentage of the screen at any resolution
+    // (like a CanvasScaler with Match = Height).
+
+    /// <summary>Screen height the UI pixel sizes were designed for.</summary>
+    public static float GuiReferenceHeight = 1440f;
+
+    /// <summary>Real pixels per reference pixel.</summary>
+    public static float GuiScale => Mathf.Max(0.01f, Screen.height / GuiReferenceHeight);
+
+    /// <summary>Screen size in reference pixels (the GUI coordinate space while <see cref="GuiMatrix"/> is applied).</summary>
+    public static float GuiWidth => Screen.width / GuiScale;
+    public static float GuiHeight => Screen.height / GuiScale;
+
+    /// <summary>Assign to GUI.matrix at the start of OnGUI.</summary>
+    public static Matrix4x4 GuiMatrix => Matrix4x4.Scale(new Vector3(GuiScale, GuiScale, 1f));
+
+    /// <summary>Converts an Input System screen position (bottom-left origin, real pixels) to scaled GUI space.</summary>
+    public static Vector2 ScreenToGUI(Vector2 screenPos) =>
+        new Vector2(screenPos.x, Screen.height - screenPos.y) / GuiScale;
+
     // ---- Shapes --------------------------------------------------------------------
 
     /// <summary>White rounded rectangle meant for 9-slicing with a border of <paramref name="radius"/> + 1.</summary>

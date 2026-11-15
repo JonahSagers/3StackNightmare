@@ -258,8 +258,9 @@ public class PiOutputPanel : MonoBehaviour
 
     Rect PanelRect()
     {
-        float w = Screen.width * widthFraction;
-        return new Rect(margin, margin, Mathf.Max(120f, w - margin * 1.5f), Screen.height - margin * 2f);
+        // Reference-pixel space (see PiUISprites.GuiScale), so the panel is the same share of the screen at any resolution.
+        float w = PiUISprites.GuiWidth * widthFraction;
+        return new Rect(margin, margin, Mathf.Max(120f, w - margin * 1.5f), PiUISprites.GuiHeight - margin * 2f);
     }
 
     const float Pad = 16f;
@@ -271,6 +272,8 @@ public class PiOutputPanel : MonoBehaviour
         if (!open) return;
         EnsureStyles();
 
+        Matrix4x4 prevMatrix = GUI.matrix;
+        GUI.matrix = PiUISprites.GuiMatrix;
         Rect r = PanelRect();
         Color prev = GUI.color;
 
@@ -285,6 +288,7 @@ public class PiOutputPanel : MonoBehaviour
         if (DrawHeader(new Rect(r.x + Pad, r.y + 12f, r.width - Pad * 2f, HeaderH - 16f)))
         {
             GUI.color = prev;
+            GUI.matrix = prevMatrix;
             return; // closed
         }
 
@@ -299,6 +303,7 @@ public class PiOutputPanel : MonoBehaviour
         DrawFollowUp(input);
 
         GUI.color = prev;
+        GUI.matrix = prevMatrix;
     }
 
     /// <summary>Badge, status pill, close button. Returns true if the panel was closed.</summary>
