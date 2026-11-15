@@ -82,7 +82,7 @@ public class RegressionWindow : EditorWindow
         // Balance
         EditorGUILayout.Space(6);
         EditorGUILayout.LabelField("Balance", EditorStyles.boldLabel);
-        if (snap.balanceTime <= 0) EditorGUILayout.LabelField("No baseline yet.");
+        if (snap.balanceTime <= 0 || snap.noBaseline) EditorGUILayout.LabelField("No baseline yet.");
         else if (snap.changes.Count == 0) EditorGUILayout.LabelField(C("No values changed since the baseline.", ColOk), rich);
         else
             foreach (RegressionStatusFiles.Change c in snap.changes)

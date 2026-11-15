@@ -275,7 +275,7 @@ public class RegressionHUD : MonoBehaviour
         }
 
         // BALANCE
-        if (snap.balanceTime <= 0) rows.Add(Text($"{Colored("BALANCE", ColDim)}  {Colored("no baseline yet", ColDim)}"));
+        if (snap.balanceTime <= 0 || snap.noBaseline) rows.Add(Text($"{Colored("BALANCE", ColDim)}  {Colored("no baseline yet", ColDim)}"));
         else if (balanceIssues.Count == 0) rows.Add(Text($"{Colored("BALANCE", ColDim)}  {Colored("no values changed", ColOk)}  {Colored(Ago(snap.balanceTime), ColDim)}"));
         else
         {

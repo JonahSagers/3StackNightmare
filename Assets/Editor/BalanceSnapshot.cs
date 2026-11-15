@@ -43,7 +43,11 @@ public static class BalanceSnapshot
     // Returns a readable report of what changed since the baseline.
     public static string Compare()
     {
-        if (!File.Exists(BaselinePath)) return "No balance baseline yet. Save one first.";
+        if (!File.Exists(BaselinePath))
+        {
+            WriteStatus(new List<string>(), false); // still answer, so nobody waits for a result that never comes
+            return "No balance baseline yet. Save one first.";
+        }
 
         var before = new Dictionary<string, string>();
         foreach (string line in File.ReadAllLines(BaselinePath))
@@ -90,10 +94,10 @@ public static class BalanceSnapshot
         return $"change\t{objectPath}\t{field}\t{oldValue}\t{newValue}";
     }
 
-    static void WriteStatus(List<string> changes)
+    static void WriteStatus(List<string> changes, bool hasBaseline = true)
     {
         Directory.CreateDirectory(RegressionStatusFiles.Folder);
-        var sb = new StringBuilder($"summary\t{RegressionStatusFiles.Now()}\t{changes.Count}\n");
+        var sb = new StringBuilder($"summary\t{RegressionStatusFiles.Now()}\t{changes.Count}\t{(hasBaseline ? "ok" : "nobaseline")}\n");
         foreach (string c in changes) sb.Append(c).Append('\n');
         File.WriteAllText(Path.Combine(RegressionStatusFiles.Folder, "balance.txt"), sb.ToString());
     }

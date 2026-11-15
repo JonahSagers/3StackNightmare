@@ -64,6 +64,7 @@ public static class RegressionStatusFiles
         public int testsPassed, testsFailed;
         // balance.txt
         public long balanceTime;
+        public bool noBaseline;
         public readonly List<Change> changes = new List<Change>();
         // review.txt
         public long reviewTime, reviewStart;
@@ -116,7 +117,11 @@ public static class RegressionStatusFiles
         foreach (string line in Lines("balance.txt"))
         {
             string[] f = line.Split('\t');
-            if (f[0] == "summary" && f.Length >= 2) long.TryParse(f[1], out s.balanceTime);
+            if (f[0] == "summary" && f.Length >= 2)
+            {
+                long.TryParse(f[1], out s.balanceTime);
+                s.noBaseline = f.Length >= 4 && f[3] == "nobaseline";
+            }
             else if (f[0] == "change" && f.Length >= 5)
                 s.changes.Add(new Change { objectPath = f[1], field = f[2], oldValue = f[3], newValue = f[4] });
         }
@@ -138,29 +143,38 @@ public static class RegressionStatusFiles
 
     public const int PipelineSteps = 6;
 
+    static string Elapsed(long seconds) => seconds < 60 ? $"{Math.Max(0, seconds)}s" : $"{seconds / 60}m {seconds % 60:00}s";
+
     /// <summary>Which step (1-6) the agent pipeline is on, its label, and overall progress 0..1.</summary>
+    //  1 Saving balance baseline        (BASELINE)
+    //  2 Editing agent works            (EDITING)
+    //  3 Starting regression checks     (RUNNING, checks not started yet)
+    //  4 Running regression checks n/N  (RUNNING, checks in progress)
+    //  5 Comparing balance values       (RUNNING, checks done)  or  reviewer agent deciding (REVIEWING)
+    //  6 Verdict                        (PASS / FAIL / REVERTED / ERROR)
     public static void Pipeline(Snapshot s, out int step, out string label, out float progress)
     {
         step = 0; label = ""; progress = 0f;
+        bool checksThisReview = s.runStart >= s.reviewStart && s.checks.Count > 0;
         switch (s.reviewState)
         {
             case "": return;
             case "BASELINE": step = 1; label = "Saving balance baseline"; break;
             case "EDITING": step = 2; label = "Editing agent is making the change"; break;
             case "RUNNING":
-                step = 3; label = "Reviewer agent started";
-                bool checksThisReview = s.runStart >= s.reviewStart && s.checks.Count > 0;
                 if (checksThisReview && s.runActive)
                 {
                     step = 4; label = $"Running regression checks ({s.checksDone}/{s.checks.Count})";
                     progress = (3f + (float)s.checksDone / s.checks.Count) / PipelineSteps;
                     return;
                 }
-                if (checksThisReview && !s.runActive)
-                {
-                    step = 5;
-                    label = s.balanceTime >= s.reviewStart ? "Comparing balance values, writing verdict" : "Checks done, comparing balance values";
-                }
+                if (checksThisReview) { step = 5; label = "Comparing balance values"; }
+                else { step = 3; label = "Starting regression checks"; }
+                break;
+            case "REVIEWING":
+                step = 5;
+                label = "Checks failed: reviewer agent deciding whether to revert";
+                label += $"  ({Elapsed(Now() - s.reviewTime)})"; // proves it's still working
                 break;
             default: step = 6; label = "Done"; progress = 1f; return; // PASS / FAIL / REVERTED / ERROR
         }

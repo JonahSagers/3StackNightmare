@@ -1,8 +1,11 @@
+using System.IO;
 using UnityEditor;
 
 // Drives the regression checks from the editor.
 //   - Pumps RegressionSuite runs forward every editor frame (works in Play mode and Edit mode).
 //   - RunAll(): runs every check step by step, then the balance comparison right after.
+//   - Watches Library/RegressionStatus/request.txt so the pi regression gate can ask for a
+//     "baseline" or a "run" without going through the command line.
 //
 //   Menu:  Tools > Regression > Run All Checks
 //   Agent: unity cmd script eval --code "return RegressionReporter.RunAll();"
@@ -10,16 +13,49 @@ using UnityEditor;
 public static class RegressionReporter
 {
     static bool compareAfterRun;
+    static double nextPoll;
 
     static RegressionReporter()
     {
-        EditorApplication.update += () => RegressionSuite.Step(EditorApplication.timeSinceStartup);
+        EditorApplication.update += Update;
         RegressionSuite.Finished += () =>
         {
             if (!compareAfterRun) return;
             compareAfterRun = false;
             BalanceSnapshot.Compare();
         };
+    }
+
+    static void Update()
+    {
+        double now = EditorApplication.timeSinceStartup;
+        RegressionSuite.Step(now);
+
+        if (now < nextPoll) return;
+        nextPoll = now + 0.2;
+        HandleRequests();
+    }
+
+    // request.txt holds one word per line: "baseline" and/or "run".
+    static void HandleRequests()
+    {
+        string path = Path.Combine(RegressionStatusFiles.Folder, "request.txt");
+        if (!File.Exists(path)) return;
+
+        string[] lines;
+        try
+        {
+            lines = File.ReadAllLines(path);
+            File.Delete(path);
+        }
+        catch (IOException) { return; } // still being written; try again next poll
+
+        foreach (string raw in lines)
+        {
+            string line = raw.Trim();
+            if (line == "baseline") BalanceSnapshot.SaveBaseline();
+            else if (line == "run") RunAll();
+        }
     }
 
     [MenuItem("Tools/Regression/Run All Checks")]
