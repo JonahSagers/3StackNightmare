@@ -31,7 +31,9 @@ public class Lane : MonoBehaviour
     [Tooltip("How far each alcove goes back into the wall.")]
     public float alcoveDepth = 8.5f;
     [Tooltip("Length of the wall piece left in the middle of each alcove opening (in line with the main wall). 0 = none.")]
-    public float alcoveMiddleWall = 6f;
+    public float alcoveMiddleWall = 9f;
+    [Tooltip("Rounding radius of the alcove's back corners. 0 = square.")]
+    public float alcoveCornerRadius = 5f;
 
     [Header("Materials")]
     public Material floorMaterial;
@@ -73,6 +75,26 @@ public class Lane : MonoBehaviour
             float dLane = (new Vector2(inLane.x - raw.x, inLane.z - raw.z)).sqrMagnitude;
             float dAlc = (new Vector2(inAlcove.x - raw.x, inAlcove.z - raw.z)).sqrMagnitude;
             if (dAlc < dLane) local = inAlcove;
+
+            // Rounded back corners of the alcove.
+            float r = AlcoveCornerRadius;
+            if (r > pad)
+            {
+                float u = Mathf.Abs(local.x) - HalfWidth;          // depth into the alcove
+                float v = local.z - alcoveCenterZ;                 // along the lane
+                float cu = alcoveDepth - r, cv = alcoveLength * 0.5f - r;
+                if (u > cu && Mathf.Abs(v) > cv)
+                {
+                    var off = new Vector2(u - cu, Mathf.Abs(v) - cv);
+                    float rr = r - pad;
+                    if (off.magnitude > rr)
+                    {
+                        off = off.normalized * rr;
+                        local.x = Mathf.Sign(local.x) * (HalfWidth + cu + off.x);
+                        local.z = alcoveCenterZ + Mathf.Sign(v) * (cv + off.y);
+                    }
+                }
+            }
 
             // Middle wall piece in each opening: push out along the shallowest axis.
             if (alcoveMiddleWall > 0f)
@@ -176,18 +198,13 @@ public class Lane : MonoBehaviour
 
         float h = wallHeightRange.x;
         float t = wallThickness;
-        float half = alcoveLength * 0.5f;
-        float backX = side * (HalfWidth + alcoveDepth + t * 0.5f);
 
         // Floor of the pocket (matches the lane floor).
         Block("Floor", root, new Vector3(side * (HalfWidth + alcoveDepth * 0.5f), 0.01f, alcoveCenterZ),
             new Vector3(alcoveDepth, 0.02f, alcoveLength), Quaternion.identity, floorMaterial);
 
-        // Back wall.
-        Block("Base", root, new Vector3(backX, h * 0.5f, alcoveCenterZ),
-            new Vector3(t, h, alcoveLength + t * 2f), Quaternion.identity, wallMaterial);
-        for (float z = -half + rockSpacing * 0.5f; z < half + t; z += rockSpacing)
-            Rock(root, new Vector3(backX + side * R(0f, 0.5f), 0f, alcoveCenterZ + z + R(-0.3f, 0.3f)), R);
+        // Back + side walls follow one path around the pocket, with rounded back corners.
+        BuildAlcoveShell(root, side, R);
 
         // Middle wall piece, in line with the main wall, leaving an entrance on each side.
         if (alcoveMiddleWall > 0f)
@@ -205,15 +222,71 @@ public class Lane : MonoBehaviour
             }
         }
 
-        // Side walls of the pocket (run across the lane direction).
-        for (int end = -1; end <= 1; end += 2)
+    }
+
+    float AlcoveCornerRadius => Mathf.Clamp(alcoveCornerRadius, 0f, Mathf.Min(alcoveDepth, alcoveLength * 0.5f));
+
+    void BuildAlcoveShell(Transform root, int side, System.Func<float, float, float> R)
+    {
+        float h = wallHeightRange.x;
+        float t = wallThickness;
+        float o = t * 0.5f;                       // wall centerline sits half a thickness outside the walkable edge
+        float half = alcoveLength * 0.5f;
+        float r = AlcoveCornerRadius;
+        float cu = alcoveDepth - r, cv = half - r;
+
+        // Path in alcove space: u = depth into the wall, v = along the lane.
+        var path = new System.Collections.Generic.List<Vector2>();
+        path.Add(new Vector2(0.5f, half + o)); // start inside the main wall
+        int arcSteps = r > 0.01f ? 8 : 0;
+        for (int i = 0; i <= arcSteps; i++)
         {
-            float z = alcoveCenterZ + end * (half + t * 0.5f);
-            float xMid = side * (HalfWidth + (alcoveDepth + t) * 0.5f);
-            Block("Base", root, new Vector3(xMid, h * 0.5f, z),
-                new Vector3(alcoveDepth + t, h, t), Quaternion.identity, wallMaterial);
-            for (float d = rockSpacing * 0.5f; d < alcoveDepth + t; d += rockSpacing)
-                Rock(root, new Vector3(side * (HalfWidth + d + R(-0.3f, 0.3f)), 0f, z + end * R(0f, 0.5f)), R, 90f);
+            float a = Mathf.Lerp(90f, 0f, i / (float)Mathf.Max(1, arcSteps)) * Mathf.Deg2Rad;
+            path.Add(new Vector2(cu + (r + o) * Mathf.Cos(a), cv + (r + o) * Mathf.Sin(a)));
+        }
+        for (int i = 0; i <= arcSteps; i++)
+        {
+            float a = Mathf.Lerp(0f, -90f, i / (float)Mathf.Max(1, arcSteps)) * Mathf.Deg2Rad;
+            path.Add(new Vector2(cu + (r + o) * Mathf.Cos(a), -cv + (r + o) * Mathf.Sin(a)));
+        }
+        path.Add(new Vector2(0.5f, -half - o));
+
+        Vector3 ToLocal(Vector2 p) => new Vector3(side * (HalfWidth + p.x), 0f, alcoveCenterZ + p.y);
+        var interior = new Vector2(alcoveDepth * 0.5f, 0f);
+
+        // Solid base along each segment (slightly overlapped so there are no gaps on the curve).
+        for (int i = 0; i < path.Count - 1; i++)
+        {
+            Vector3 a = ToLocal(path[i]), b = ToLocal(path[i + 1]);
+            Vector3 d = b - a;
+            float len = d.magnitude;
+            if (len < 0.01f) continue;
+            Block("Base", root, (a + b) * 0.5f + Vector3.up * h * 0.5f, new Vector3(t, h, len + t * 0.5f),
+                Quaternion.LookRotation(d / len, Vector3.up), wallMaterial);
+        }
+
+        // Rocks spaced evenly along the path.
+        float total = 0f;
+        for (int i = 0; i < path.Count - 1; i++) total += Vector2.Distance(path[i], path[i + 1]);
+        for (float dist = rockSpacing * 0.5f; dist < total; dist += rockSpacing)
+        {
+            float acc = dist;
+            int seg = 0;
+            while (seg < path.Count - 2 && acc > Vector2.Distance(path[seg], path[seg + 1]))
+            {
+                acc -= Vector2.Distance(path[seg], path[seg + 1]);
+                seg++;
+            }
+            Vector2 p0 = path[seg], p1 = path[seg + 1];
+            Vector2 dir = (p1 - p0).normalized;
+            Vector2 p = p0 + dir * acc;
+            Vector2 n = new Vector2(-dir.y, dir.x);
+            if (Vector2.Dot(n, p - interior) < 0f) n = -n;
+            p += n * R(0f, 0.4f);
+
+            Vector3 dLocal = new Vector3(side * dir.x, 0f, dir.y);
+            float yaw = Mathf.Atan2(dLocal.x, dLocal.z) * Mathf.Rad2Deg;
+            Rock(root, ToLocal(p), R, yaw);
         }
     }
 
