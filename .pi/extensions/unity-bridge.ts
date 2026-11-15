@@ -45,6 +45,7 @@ function rulesFor(p: PromptPayload): string[] {
 		"Don't use input simulation (runtime_simulate_key / runtime_simulate_pointer); test via script eval or ask the user.",
 		"Never recompile (no `unity recompile` / script_recompile); just save .cs files and Hot Reload patches them.",
 		"After editing scripts, check `unity cmd console get --level error` for [HotReload] errors / \"Unsupported change\" warnings.",
+		"Your text is shown to the player in a small in-game panel. At key points (before investigating, before changing things, after verifying), write one short plain-English sentence about what you're doing and why, e.g. \"Looking at how the player's jump works.\" Don't include commands, code, file paths, or tool names in your replies; describe changes in terms of what the player will notice.",
 	];
 	if (p.isPlaying)
 		rules.push(
@@ -144,14 +145,84 @@ function formatPrompt(p: PromptPayload, cwd = process.cwd()): string {
 	return lines.join("\n");
 }
 
-/** Short one-line summary of tool arguments for the Unity panel. */
-function summarizeArgs(args: unknown): string {
-	if (!args || typeof args !== "object") return "";
-	const a = args as Record<string, unknown>;
-	const pick = a.path ?? a.command ?? a.Title ?? a.title ?? a.query ?? a.name;
-	if (typeof pick !== "string") return "";
-	const oneLine = pick.replace(/\s+/g, " ").trim();
-	return oneLine.length > 80 ? `${oneLine.slice(0, 77)}...` : oneLine;
+/** Friendly name for a file: "the MouseHandler script", "the SampleScene scene", "notes.md". */
+function friendlyFile(p: unknown): string {
+	if (typeof p !== "string" || !p.trim()) return "a file";
+	const base = path.basename(p.trim());
+	const ext = path.extname(base).toLowerCase();
+	const name = path.basename(base, ext);
+	if (ext === ".cs") return `the ${name} script`;
+	if (ext === ".unity") return `the ${name} scene`;
+	if (ext === ".prefab") return `the ${name} prefab`;
+	if (ext === ".mat") return `the ${name} material`;
+	if (ext === ".shader" || ext === ".shadergraph") return `the ${name} shader`;
+	if (ext === ".ts") return `the ${name} extension`;
+	return base;
+}
+
+/** Plain-English description of a Unity pipeline command (MCP tool name without prefix/hash). */
+function describeUnityCommand(name: string): string {
+	const n = name.toLowerCase().replace(/^mcp__unity__/, "").replace(/_[0-9a-f]{8}$/, "");
+	if (/eval|script_run|^run$/.test(n)) return "Running a quick check inside the editor";
+	if (/game_view|scene_view|editor_window|screenshot/.test(n)) return "Taking a look at the screen";
+	if (/hierarchy|^find|gameobject_find/.test(n)) return "Looking through the objects in the scene";
+	if (/get_component/.test(n)) return "Inspecting an object's settings";
+	if (/set_component|set_transform|create|batch|delete|destroy|add_component/.test(n)) return "Changing objects in the scene";
+	if (/^start$|play/.test(n)) return "Starting the game";
+	if (/^stop$/.test(n)) return "Stopping the game";
+	if (/^pause$/.test(n)) return "Pausing the game";
+	if (/save/.test(n)) return "Saving the scene";
+	if (/clear/.test(n)) return "Clearing the console";
+	if (/wait/.test(n)) return "Waiting for the editor to be ready";
+	if (/test/.test(n)) return "Running tests";
+	if (/list_commands|describe/.test(n)) return "Figuring out which editor tools to use";
+	return "Working in the Unity editor";
+}
+
+/** Plain-English description of a shell command. */
+function describeShell(cmd: unknown): string {
+	const c = typeof cmd === "string" ? cmd : "";
+	if (/unity\s+cmd\s+console\s+get/.test(c))
+		return /--level\s+(error|warn)/.test(c) ? "Checking the console for errors" : "Reading the console log";
+	if (/unity\s+cmd\s+console\s+status/.test(c)) return "Checking the console for errors";
+	if (/unity\s+status/.test(c)) return "Checking that the editor is ready";
+	const m = c.match(/unity\s+cmd\s+(\w+)\s+(\w+)/);
+	if (m) return describeUnityCommand(`${m[1]}_${m[2]}`);
+	if (/^\s*(cd\s+\S+\s*(&&|;)\s*)?(rg|grep|find|ls|fd|tree)\b/.test(c)) return "Searching the project";
+	if (/^\s*(cd\s+\S+\s*(&&|;)\s*)?(cat|head|tail|wc|sed -n)\b/.test(c)) return "Reading project files";
+	if (/^\s*git\b/.test(c)) return "Checking recent changes";
+	if (/sleep\s+\d/.test(c)) return "Waiting for the editor to be ready";
+	return "Running a command";
+}
+
+/** Plain-English, non-technical description of a tool call for the Unity panel ("" = don't show). */
+function describeTool(toolName: string, args: unknown): string {
+	const a = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
+	const t = toolName.toLowerCase();
+	switch (t) {
+		case "read":
+			return `Reading ${friendlyFile(a.path)}`;
+		case "edit":
+			return `Updating ${friendlyFile(a.path)}`;
+		case "write": {
+			const p = typeof a.path === "string" ? a.path : "";
+			let exists = false;
+			try {
+				exists = !!p && fs.existsSync(path.resolve(p));
+			} catch {}
+			return `${exists ? "Rewriting" : "Creating"} ${friendlyFile(p)}`;
+		}
+		case "bash":
+			return describeShell(a.command);
+		case "codemode":
+			return ""; // its nested tool calls are described individually
+		case "grep":
+		case "find":
+		case "ls":
+			return "Searching the project";
+	}
+	if (t.startsWith("mcp__unity__") || t.startsWith("unity_")) return describeUnityCommand(t);
+	return "Working on it";
 }
 
 function textOf(content: unknown): string {
@@ -192,7 +263,10 @@ export default function (pi: ExtensionAPI) {
 	pi.on("message_start", async (event) => {
 		const m: any = event.message;
 		if (m?.role === "user") push("user", textOf(m.content));
-		if (m?.role === "assistant") push("text", "\n");
+		if (m?.role === "assistant") {
+			lastStep = "";
+			push("text", "\n");
+		}
 	});
 
 	pi.on("message_update", async (event) => {
@@ -200,13 +274,26 @@ export default function (pi: ExtensionAPI) {
 		if (e?.type === "text_delta" && typeof e.delta === "string") push("text", e.delta);
 	});
 
+	// Plain-English step descriptions; consecutive duplicates are collapsed so the panel stays readable.
+	const stepFor = new Map<string, string>();
+	let lastStep = "";
+
 	pi.on("tool_execution_start", async (event) => {
-		const summary = summarizeArgs(event.args);
-		push("tool", `> ${event.toolName}${summary ? `  ${summary}` : ""}`);
+		const step = describeTool(event.toolName, event.args);
+		if (!step) return;
+		stepFor.set(event.toolCallId, step);
+		if (step === lastStep) return;
+		lastStep = step;
+		push("tool", `> ${step}`);
 	});
 
 	pi.on("tool_execution_end", async (event) => {
-		if (event.isError) push("tool", `x ${event.toolName} failed`);
+		const step = stepFor.get(event.toolCallId);
+		stepFor.delete(event.toolCallId);
+		if (event.isError && step) {
+			lastStep = "";
+			push("tool", `x That didn't work (${step.charAt(0).toLowerCase()}${step.slice(1)}), trying another way`);
+		}
 	});
 
 	// ---- HTTP server ---------------------------------------------------------------
