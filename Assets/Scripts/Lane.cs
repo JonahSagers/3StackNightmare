@@ -34,12 +34,15 @@ public class Lane : MonoBehaviour
     public float alcoveMiddleWall = 9f;
     [Tooltip("Rounding radius of the alcove's back corners. 0 = square.")]
     public float alcoveCornerRadius = 5f;
+    [Tooltip("Put a health pack in each alcove, just behind the middle wall.")]
+    public bool alcoveHealthPacks = true;
 
     [Header("Materials")]
     public Material floorMaterial;
     public Material wallMaterial;
     public Material blueBaseMaterial;
     public Material redBaseMaterial;
+    public Material healthPackMaterial;
 
     [Header("Movement")]
     [Tooltip("Extra gap kept between characters and the walls.")]
@@ -206,6 +209,14 @@ public class Lane : MonoBehaviour
         // Back + side walls follow one path around the pocket, with rounded back corners.
         BuildAlcoveShell(root, side, R);
 
+        // Health pack tucked behind the middle wall (halfway between it and the back wall).
+        if (alcoveHealthPacks)
+        {
+            float behind = alcoveMiddleWall > 0f ? t : 0f;
+            float u = behind + (alcoveDepth - behind) * 0.5f;
+            BuildHealthPack(root, new Vector3(side * (HalfWidth + u), 0f, alcoveCenterZ));
+        }
+
         // Middle wall piece, in line with the main wall, leaving an entrance on each side.
         if (alcoveMiddleWall > 0f)
         {
@@ -222,6 +233,22 @@ public class Lane : MonoBehaviour
             }
         }
 
+    }
+
+    void BuildHealthPack(Transform parent, Vector3 localPos)
+    {
+        var pack = new GameObject("HealthPack").transform;
+        pack.SetParent(parent, false);
+        pack.localPosition = localPos;
+        pack.gameObject.AddComponent<HealthPack>();
+
+        // Visual: a floating green plus sign (child 0 is spun/bobbed and hidden while respawning).
+        var visual = new GameObject("Visual").transform;
+        visual.SetParent(pack, false);
+        visual.localPosition = new Vector3(0f, 0.9f, 0f);
+        visual.localRotation = Quaternion.Euler(0f, 45f, 0f);
+        Block("Bar", visual, Vector3.zero, new Vector3(0.9f, 0.3f, 0.3f), Quaternion.identity, healthPackMaterial);
+        Block("Bar", visual, Vector3.zero, new Vector3(0.3f, 0.9f, 0.3f), Quaternion.identity, healthPackMaterial);
     }
 
     float AlcoveCornerRadius => Mathf.Clamp(alcoveCornerRadius, 0f, Mathf.Min(alcoveDepth, alcoveLength * 0.5f));
