@@ -77,6 +77,15 @@ public class MouseHandler : MonoBehaviour
     public Color promptBackgroundColor = new Color(0.15f, 0.15f, 0.18f, 0.96f);
     public Color promptPlaceholderColor = new Color(1f, 1f, 1f, 0.35f);
 
+    [Header("Context Points")]
+    [Tooltip("While paused with the prompt open, left-clicking the ground adds a world point that is sent with the prompt.")]
+    public List<Vector3> contextPoints = new List<Vector3>();
+    [Tooltip("Max number of ground points per prompt.")]
+    public int maxContextPoints = 9;
+    [Tooltip("Clicking within this many GUI pixels of a pin removes it.")]
+    public float contextPinRadius = 13f;
+    public Color contextPinColor = new Color(1f, 0.78f, 0.15f, 1f);
+
     // Menu state
     bool menuOpen;
     GameObject menuTarget;
@@ -189,6 +198,13 @@ public class MouseHandler : MonoBehaviour
             if (PiOutputPanel.IsPointerOver(guiMouse))
                 return;
 
+            // With the prompt open, clicks on the ground add/remove context points instead of closing it.
+            if (menuOpen && (hovered == null || hovered.GetComponentInParent<Outline>() == null))
+            {
+                HandleContextClick(ray, guiMouse);
+                return;
+            }
+
             if (hovered != null)
                 OpenMenu(hovered, guiMouse);
             else
@@ -220,6 +236,90 @@ public class MouseHandler : MonoBehaviour
         if (hoveredOutline != null) hoveredOutline.Hide();
         hoveredOutline = next;
         if (hoveredOutline != null) hoveredOutline.Show(hoverOutlineColor);
+    }
+
+    /// <summary>Click on the ground while the prompt is open: remove a pin under the cursor, or add a new point.</summary>
+    void HandleContextClick(Ray ray, Vector2 guiMouse)
+    {
+        for (int i = contextPoints.Count - 1; i >= 0; i--)
+        {
+            if (TryPinGuiPos(contextPoints[i], out Vector2 pin) && (pin - guiMouse).sqrMagnitude <= contextPinRadius * contextPinRadius)
+            {
+                contextPoints.RemoveAt(i);
+                focusPromptNext = true;
+                return;
+            }
+        }
+        if (contextPoints.Count >= maxContextPoints) { focusPromptNext = true; return; }
+        if (TryGetGroundPoint(ray, out Vector3 point))
+        {
+            contextPoints.Add(point);
+            if (logSelection) Debug.Log($"[MouseHandler] Context point #{contextPoints.Count} at {FormatPoint(point)}");
+        }
+        focusPromptNext = true; // keep typing after the click
+    }
+
+    /// <summary>Nearest ground hit (Ground / Background-tagged / non-character collider), else the y = 0 plane.</summary>
+    bool TryGetGroundPoint(Ray ray, out Vector3 point)
+    {
+        RaycastHit[] hits = Physics.RaycastAll(ray, maxDistance, hoverMask, QueryTriggerInteraction.Ignore);
+        float best = float.MaxValue;
+        point = default;
+        foreach (RaycastHit h in hits)
+        {
+            if (h.distance >= best || h.collider.GetComponentInParent<Outline>() != null) continue;
+            best = h.distance;
+            point = h.point;
+        }
+        if (best < float.MaxValue) return true;
+        if (new Plane(Vector3.up, Vector3.zero).Raycast(ray, out float dist))
+        {
+            point = ray.GetPoint(dist);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>GUI (reference-pixel) position of a world point; false if it is behind the camera.</summary>
+    bool TryPinGuiPos(Vector3 world, out Vector2 gui)
+    {
+        gui = default;
+        if (cam == null) return false;
+        Vector3 sp = cam.WorldToScreenPoint(world);
+        if (sp.z <= 0f) return false;
+        gui = PiUISprites.ScreenToGUI(sp);
+        return true;
+    }
+
+    static string FormatPoint(Vector3 p)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        return $"({p.x.ToString("0.##", inv)}, {p.y.ToString("0.##", inv)}, {p.z.ToString("0.##", inv)})";
+    }
+
+    /// <summary>"#1 (x, y, z), nearest: Enemy 1.2m away" for each context point.</summary>
+    string[] DescribeContextPoints()
+    {
+        var result = new string[contextPoints.Count];
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        Outline[] chars = FindObjectsByType<Outline>(FindObjectsSortMode.None);
+        for (int i = 0; i < contextPoints.Count; i++)
+        {
+            Vector3 p = contextPoints[i];
+            string s = $"#{i + 1} world {FormatPoint(p)}";
+            Outline nearest = null;
+            float nd = float.MaxValue;
+            foreach (Outline o in chars)
+            {
+                if (o == null) continue;
+                Vector3 d = o.transform.position - p;
+                d.y = 0f;
+                if (d.magnitude < nd) { nd = d.magnitude; nearest = o; }
+            }
+            if (nearest != null) s += $", nearest character: {nearest.name} {nd.ToString("0.#", inv)}m away at {FormatPoint(nearest.transform.position)}";
+            result[i] = s;
+        }
+        return result;
     }
 
     void OpenMenu(GameObject target, Vector2 guiPos)
@@ -256,6 +356,7 @@ public class MouseHandler : MonoBehaviour
         public bool isPlaying;
         public bool editorPaused;
         public bool gamePaused;
+        public string[] contextPoints; // ground points clicked while the prompt was open
     }
 
     /// <summary>Fills the parts of the payload that must be current at send time (fields, play state).</summary>
@@ -353,6 +454,7 @@ public class MouseHandler : MonoBehaviour
                 .ConvertAll(c => $"{c.GetType().Name} on '{HierarchyPath(c.transform)}'").ToArray(),
         };
         CaptureLiveState(payload, selectedComponents.FindAll(c => c != null));
+        payload.contextPoints = DescribeContextPoints();
 
         StartCoroutine(PostToPi(JsonUtility.ToJson(payload)));
     }
@@ -421,6 +523,7 @@ public class MouseHandler : MonoBehaviour
         menuTarget = null;
         pressedIndex = -1;
         prompt = "";
+        contextPoints.Clear();
     }
 
     Vector2 MenuSize()
@@ -590,6 +693,7 @@ public class MouseHandler : MonoBehaviour
         if (e.type == EventType.MouseUp && e.button == 0) pressedIndex = -1;
 
         DrawPrompt(promptRect, e);
+        DrawContextPoints(menu);
 
         if (e.type == EventType.MouseMove || e.type == EventType.MouseDrag) e.Use(); // repaint hover
 
@@ -636,6 +740,61 @@ public class MouseHandler : MonoBehaviour
             GUI.FocusControl(PromptControl);
             focusPromptNext = false;
         }
+    }
+
+    /// <summary>Numbered pins on the clicked ground points, plus a hint under the menu.</summary>
+    void DrawContextPoints(Rect menu)
+    {
+        if (Event.current.type != EventType.Repaint) return;
+        EnsurePinStyle();
+        float d = contextPinRadius * 2f;
+        for (int i = 0; i < contextPoints.Count; i++)
+        {
+            if (!TryPinGuiPos(contextPoints[i], out Vector2 p)) continue;
+            Rect r = new Rect(p.x - contextPinRadius, p.y - contextPinRadius, d, d);
+            GUI.color = shadowColor;
+            GUI.DrawTexture(new Rect(r.x, r.y + 2f, d, d), PinTexture());
+            GUI.color = contextPinColor;
+            GUI.DrawTexture(r, PinTexture());
+            GUI.color = Color.white;
+            GUI.Label(r, (i + 1).ToString(), pinStyle);
+        }
+
+        string hint = contextPoints.Count == 0
+            ? "Click the ground to add points"
+            : $"{contextPoints.Count} point{(contextPoints.Count == 1 ? "" : "s")} \u00b7 click a pin to remove";
+        GUI.color = Color.white;
+        Rect hr = new Rect(menu.x, menu.yMax + 4f, Mathf.Max(menu.width, 260f), 20f);
+        GUI.Label(hr, hint, hintStyle);
+    }
+
+    GUIStyle pinStyle, hintStyle;
+    Texture2D pinTex;
+
+    Texture2D PinTexture()
+    {
+        if (pinTex == null) pinTex = PiUISprites.Circle(64);
+        return pinTex;
+    }
+
+    void EnsurePinStyle()
+    {
+        if (pinStyle != null) return;
+        pinStyle = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = Mathf.Max(10, fontSize - 2),
+            fontStyle = FontStyle.Bold,
+            padding = new RectOffset(0, 0, 0, 0),
+        };
+        pinStyle.normal.textColor = new Color(0.1f, 0.08f, 0.02f, 1f);
+        hintStyle = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleLeft,
+            fontSize = Mathf.Max(10, fontSize - 3),
+            padding = new RectOffset(6, 0, 0, 0),
+        };
+        hintStyle.normal.textColor = new Color(1f, 1f, 1f, 0.6f);
     }
 
     /// <summary>Draws the part of the full-menu mask that lies under <paramref name="seg"/>.</summary>

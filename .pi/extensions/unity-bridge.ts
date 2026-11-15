@@ -37,6 +37,7 @@ interface PromptPayload {
 	isPlaying?: boolean;
 	editorPaused?: boolean;
 	gamePaused?: boolean;
+	contextPoints?: string[];
 }
 
 /** Condensed AGENTS.md rules, tailored to whether the game is running. */
@@ -140,6 +141,11 @@ function formatPrompt(p: PromptPayload, cwd = process.cwd()): string {
 			const fields = p.selectedComponentFields?.[i];
 			if (fields) ctx.push(`Current fields of ${c}: ${fields}`);
 		});
+	}
+	if (p.contextPoints?.length) {
+		ctx.push(
+			`Ground points the user clicked while writing this prompt (in order; the prompt may refer to them as "here"/"there"; y is the ground height): ${p.contextPoints.join("; ")}`,
+		);
 	}
 	const scripts = scriptPaths(p, cwd);
 	if (scripts.length) ctx.push(`Script files: ${scripts.join("; ")}`);
