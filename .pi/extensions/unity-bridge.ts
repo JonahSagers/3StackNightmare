@@ -10,7 +10,8 @@
  *   GET  /output?since=<seq>   -> { ok: true, seq, busy, chunks: [{ seq, kind, text }] }
  *
  * Output chunk kinds: "text" (assistant text delta), "tool" (tool call started/finished),
- * "user" (prompt that started a run), "status" (run started/finished).
+ * "user" (prompt that started a run), "status" (run started/finished),
+ * "files" (end-of-run summary for Unity prompts: "Files changed" title line + one line per file).
  *
  * Port can be overridden with PI_UNITY_BRIDGE_PORT.
  */
@@ -46,6 +47,7 @@ function rulesFor(p: PromptPayload): string[] {
 		"Never recompile (no `unity recompile` / script_recompile); just save .cs files and Hot Reload patches them.",
 		"After editing scripts, check `unity cmd console get --level error` for [HotReload] errors / \"Unsupported change\" warnings.",
 		"Your text is shown to the player in a small in-game panel. At key points (before investigating, before changing things, after verifying), write one short plain-English sentence about what you're doing and why, e.g. \"Looking at how the player's jump works.\" Don't include commands, code, file paths, or tool names in your replies; describe changes in terms of what the player will notice.",
+		"Don't list the files you changed; the panel shows a files-changed card automatically at the end.",
 	];
 	if (p.isPlaying)
 		rules.push(
@@ -58,7 +60,7 @@ function rulesFor(p: PromptPayload): string[] {
 
 interface OutputChunk {
 	seq: number;
-	kind: "text" | "tool" | "user" | "status";
+	kind: "text" | "tool" | "user" | "status" | "files";
 	text: string;
 }
 
@@ -250,19 +252,39 @@ export default function (pi: ExtensionAPI) {
 		if (chunks.length > MAX_CHUNKS) chunks.splice(0, chunks.length - MAX_CHUNKS);
 	};
 
+	// Files changed during the current run (path -> "Created" | "Updated"), summarized for Unity prompts.
+	const changedFiles = new Map<string, "Created" | "Updated">();
+	const pendingChange = new Map<string, { path: string; verb: "Created" | "Updated" }>();
+	let unityRun = false;
+
 	pi.on("agent_start", async () => {
 		busy = true;
+		changedFiles.clear();
+		unityRun = false;
 		push("status", "working");
 	});
 
 	pi.on("agent_settled", async (event) => {
 		busy = false;
+		if (unityRun) {
+			// One "files" chunk: title line, then one line per file (the panel draws it as a puck).
+			const lines = ["Files changed"];
+			if (!changedFiles.size) lines.push("No files were changed");
+			for (const [p, verb] of changedFiles) lines.push(`${verb} ${friendlyFile(p)}`);
+			push("files", lines.join("\n"));
+		}
+		changedFiles.clear();
+		unityRun = false;
 		push("status", event.aborted ? "aborted" : "done");
 	});
 
 	pi.on("message_start", async (event) => {
 		const m: any = event.message;
-		if (m?.role === "user") push("user", textOf(m.content));
+		if (m?.role === "user") {
+			const t = textOf(m.content);
+			if (t.trimStart().startsWith("[Unity]")) unityRun = true;
+			push("user", t);
+		}
 		if (m?.role === "assistant") {
 			lastStep = "";
 			push("text", "\n");
@@ -279,6 +301,16 @@ export default function (pi: ExtensionAPI) {
 	let lastStep = "";
 
 	pi.on("tool_execution_start", async (event) => {
+		const t = event.toolName.toLowerCase();
+		const a: any = event.args ?? {};
+		if ((t === "edit" || t === "write") && typeof a.path === "string" && a.path.trim()) {
+			const abs = path.resolve(ctxRef?.cwd ?? process.cwd(), a.path.trim());
+			let existed = true;
+			try {
+				existed = fs.existsSync(abs);
+			} catch {}
+			pendingChange.set(event.toolCallId, { path: abs, verb: existed ? "Updated" : "Created" });
+		}
 		const step = describeTool(event.toolName, event.args);
 		if (!step) return;
 		stepFor.set(event.toolCallId, step);
@@ -288,6 +320,9 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("tool_execution_end", async (event) => {
+		const change = pendingChange.get(event.toolCallId);
+		pendingChange.delete(event.toolCallId);
+		if (change && !event.isError && !changedFiles.has(change.path)) changedFiles.set(change.path, change.verb);
 		const step = stepFor.get(event.toolCallId);
 		stepFor.delete(event.toolCallId);
 		if (event.isError && step) {

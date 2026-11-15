@@ -4,7 +4,7 @@
  * Blocks agent-run C# (the Unity "agent sandbox") that uses LINQ or Reflection.
  *
  * Covered entry points:
- *   - mcp__unity__script_eval / mcp__unity__eval   (inline `code` or `file`)
+ *   - mcp__unity__script_eval                      (inline `code` or `file`)
  *   - mcp__unity__script_run                       (`file`)
  *   - bash: `unity cmd|command script eval|run ...` (inline --code or --file)
  *   - write / edit of `.cs` files: blocked only if the change ADDS LINQ/Reflection usages
@@ -175,7 +175,7 @@ function blockReason(where: string, hits: string[]): string {
 	].join("\n");
 }
 
-const EVAL_TOOL = /^mcp__unity__(script_)?(eval|run)$/;
+const EVAL_TOOL = /^mcp__unity__script_(eval|run)$/;
 const BASH_UNITY_SCRIPT = /\bunity\s+(cmd|command)\s+script\s+(eval|run)\b/;
 
 export default function (pi: ExtensionAPI) {
