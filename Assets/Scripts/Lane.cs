@@ -27,11 +27,11 @@ public class Lane : MonoBehaviour
     [Tooltip("Position of the alcoves along the lane (0 = middle).")]
     public float alcoveCenterZ = 0f;
     [Tooltip("Opening size along the lane.")]
-    public float alcoveLength = 14f;
+    public float alcoveLength = 19f;
     [Tooltip("How far each alcove goes back into the wall.")]
-    public float alcoveDepth = 7.5f;
+    public float alcoveDepth = 8.5f;
     [Tooltip("Length of the wall piece left in the middle of each alcove opening (in line with the main wall). 0 = none.")]
-    public float alcoveMiddleWall = 5f;
+    public float alcoveMiddleWall = 6f;
 
     [Header("Materials")]
     public Material floorMaterial;
