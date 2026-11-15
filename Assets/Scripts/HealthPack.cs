@@ -14,9 +14,6 @@ public class HealthPack : MonoBehaviour
     [Tooltip("Seconds before the pack comes back after being picked up.")]
     public float respawnSeconds = 30f;
 
-    [Tooltip("Which team can pick it up (the player and their teammates are Ally).")]
-    public Team pickupTeam = Team.Ally;
-
     [Tooltip("Characters already at full health walk over it without using it.")]
     public bool ignoreWhenFull = true;
 
@@ -32,6 +29,9 @@ public class HealthPack : MonoBehaviour
     float readyTime;
 
     public bool IsReady => Time.time >= readyTime;
+
+    // Team rule: only living Ally-team characters (the player and teammates) can pick it up.
+    public static bool CanPickUp(Health h) => h != null && !h.IsDead && h.team == Team.Ally;
 
     void Update()
     {
@@ -61,12 +61,12 @@ public class HealthPack : MonoBehaviour
             nextCandidateRefresh = Time.time + 1f;
             candidates.Clear();
             foreach (var h in FindObjectsByType<Health>())
-                if (h.team == pickupTeam) candidates.Add(h);
+                if (CanPickUp(h)) candidates.Add(h);
         }
 
         foreach (var h in candidates)
         {
-            if (h == null || h.IsDead) continue;
+            if (!CanPickUp(h)) continue;
             if (ignoreWhenFull && h.Current >= h.maxHealth) continue;
 
             Vector3 d = h.transform.position - transform.position;

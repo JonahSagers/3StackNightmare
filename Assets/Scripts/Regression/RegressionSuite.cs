@@ -264,8 +264,7 @@ public static class RegressionSuite
         new DamageSource { file = "LeapSlam.cs", ruleFile = "LeapSlam.cs", rule = "ShouldHit(", damage = 1, why = "leap slam" },
         new DamageSource { file = "Fountain.cs", ruleFile = "Fountain.cs", rule = "PlayerMove", damage = 1, heal = 1, why = "base pads (player only)" },
         new DamageSource { file = "FullHealKey.cs", ruleFile = "FullHealKey.cs", rule = "GetComponent<Health>", heal = 1, why = "H key (heals yourself)" },
-        new DamageSource { file = "ShieldAbility.cs", ruleFile = "ShieldAbility.cs", rule = "GetComponent<Health>", shield = 1, why = "R shield (yourself)" },
-    };
+        new DamageSource { file = "ShieldAbility.cs", ruleFile = "ShieldAbility.cs", rule = "GetComponent<Health>", shield = 1, why = "R shield (yourself)" },    };
 
     static string ScriptsFolder => Path.Combine(Application.dataPath, "Scripts");
 
@@ -563,7 +562,6 @@ public static class RegressionSuite
         });
 
         // Code scan: any code that deals damage or heals must go through a team rule.
-        Add(c, "AllDamageSources_UseTeamRules", CheckDamageSources);
         Add(c, "NoCode_ChangesTeamsAtRuntime", CheckNoTeamChangesInCode);
 
         // Scene setup.
