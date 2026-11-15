@@ -252,7 +252,90 @@ public class MouseHandler : MonoBehaviour
         public string targetPath;
         public string[] components;
         public string[] selectedComponents;
+        public string[] selectedComponentFields; // parallel to selectedComponents: "field=value, ..."
+        public bool isPlaying;
+        public bool editorPaused;
+        public bool gamePaused;
     }
+
+    /// <summary>Fills the parts of the payload that must be current at send time (fields, play state).</summary>
+    void CaptureLiveState(PromptPayload payload, List<Component> comps)
+    {
+        payload.isPlaying = Application.isPlaying;
+#if UNITY_EDITOR
+        payload.editorPaused = UnityEditor.EditorApplication.isPaused;
+#endif
+        payload.gamePaused = IsGamePaused();
+        payload.selectedComponentFields = comps.ConvertAll(c => c != null ? DescribeFields(c) : "(destroyed)").ToArray();
+    }
+
+    /// <summary>Finds a component again from its "Type on 'Hierarchy/Path'" label (used for follow-ups).</summary>
+    static Component ResolveComponent(string label)
+    {
+        int on = label.IndexOf(" on '");
+        if (on < 0 || !label.EndsWith("'")) return null;
+        string type = label.Substring(0, on);
+        string path = label.Substring(on + 5, label.Length - on - 6);
+        GameObject go = GameObject.Find(path);
+        return go != null ? go.GetComponent(type) : null;
+    }
+
+    /// <summary>Current serialized field values of a component, as "field=value, ..." (property paths usable with set_field).</summary>
+    static string DescribeFields(Component c)
+    {
+#if UNITY_EDITOR
+        var so = new UnityEditor.SerializedObject(c);
+        var sb = new System.Text.StringBuilder();
+        UnityEditor.SerializedProperty it = so.GetIterator();
+        bool enter = true;
+        while (it.NextVisible(enter))
+        {
+            enter = false;
+            if (it.propertyPath == "m_Script") continue;
+            if (sb.Length > 0) sb.Append(", ");
+            sb.Append(it.propertyPath).Append('=').Append(FormatProperty(it));
+            if (sb.Length > 3000) { sb.Append(", ..."); break; }
+        }
+        return sb.ToString();
+#else
+        return c is MonoBehaviour ? JsonUtility.ToJson(c) : "";
+#endif
+    }
+
+#if UNITY_EDITOR
+    static string FormatProperty(UnityEditor.SerializedProperty p)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        switch (p.propertyType)
+        {
+            case UnityEditor.SerializedPropertyType.Integer: return p.longValue.ToString(inv);
+            case UnityEditor.SerializedPropertyType.Boolean: return p.boolValue ? "true" : "false";
+            case UnityEditor.SerializedPropertyType.Float: return p.floatValue.ToString("0.###", inv);
+            case UnityEditor.SerializedPropertyType.String:
+                string s = p.stringValue ?? "";
+                return "\"" + (s.Length > 80 ? s.Substring(0, 77) + "..." : s) + "\"";
+            case UnityEditor.SerializedPropertyType.Color: return p.colorValue.ToString();
+            case UnityEditor.SerializedPropertyType.LayerMask: return p.intValue.ToString(inv);
+            case UnityEditor.SerializedPropertyType.Enum:
+                string[] names = p.enumDisplayNames;
+                return p.enumValueIndex >= 0 && p.enumValueIndex < names.Length ? names[p.enumValueIndex] : p.intValue.ToString(inv);
+            case UnityEditor.SerializedPropertyType.Vector2: return p.vector2Value.ToString();
+            case UnityEditor.SerializedPropertyType.Vector3: return p.vector3Value.ToString();
+            case UnityEditor.SerializedPropertyType.Vector4: return p.vector4Value.ToString();
+            case UnityEditor.SerializedPropertyType.Vector2Int: return p.vector2IntValue.ToString();
+            case UnityEditor.SerializedPropertyType.Vector3Int: return p.vector3IntValue.ToString();
+            case UnityEditor.SerializedPropertyType.Rect: return p.rectValue.ToString();
+            case UnityEditor.SerializedPropertyType.Bounds: return p.boundsValue.ToString();
+            case UnityEditor.SerializedPropertyType.Quaternion: return "euler" + p.quaternionValue.eulerAngles.ToString();
+            case UnityEditor.SerializedPropertyType.ObjectReference:
+                Object o = p.objectReferenceValue;
+                return o != null ? $"{o.name} ({o.GetType().Name})" : "null";
+            case UnityEditor.SerializedPropertyType.ArraySize: return p.intValue.ToString(inv);
+            default:
+                return p.isArray ? $"[{p.arraySize} items]" : "{...}";
+        }
+    }
+#endif
 
     void SendPrompt()
     {
@@ -269,6 +352,7 @@ public class MouseHandler : MonoBehaviour
             selectedComponents = selectedComponents.FindAll(c => c != null)
                 .ConvertAll(c => $"{c.GetType().Name} on '{HierarchyPath(c.transform)}'").ToArray(),
         };
+        CaptureLiveState(payload, selectedComponents.FindAll(c => c != null));
 
         StartCoroutine(PostToPi(JsonUtility.ToJson(payload)));
     }
@@ -288,6 +372,11 @@ public class MouseHandler : MonoBehaviour
         }
         if (payload == null) payload = new PromptPayload { scene = gameObject.scene.name };
         payload.prompt = text;
+        // The saved context is from the earlier prompt; refresh field values and play state.
+        var comps = new List<Component>();
+        if (payload.selectedComponents != null)
+            foreach (string label in payload.selectedComponents) comps.Add(ResolveComponent(label));
+        CaptureLiveState(payload, comps);
         Debug.Log("Follow-up prompt: " + text);
         StartCoroutine(PostToPi(JsonUtility.ToJson(payload)));
     }

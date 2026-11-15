@@ -15,7 +15,9 @@
  * Port can be overridden with PI_UNITY_BRIDGE_PORT.
  */
 
+import * as fs from "node:fs";
 import * as http from "node:http";
+import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const HOST = "127.0.0.1";
@@ -30,6 +32,27 @@ interface PromptPayload {
 	targetPath?: string;
 	components?: string[];
 	selectedComponents?: string[];
+	selectedComponentFields?: string[];
+	isPlaying?: boolean;
+	editorPaused?: boolean;
+	gamePaused?: boolean;
+}
+
+/** Condensed AGENTS.md rules, tailored to whether the game is running. */
+function rulesFor(p: PromptPayload): string[] {
+	const rules = [
+		"No LINQ or Reflection in agent-run C# (script eval/run) or in new .cs code (blocked by unity-eval-guard); use loops, List<T>, GetComponent, FindObjectsByType, SerializedObject.",
+		"Don't use input simulation (runtime_simulate_key / runtime_simulate_pointer); test via script eval or ask the user.",
+		"Never recompile (no `unity recompile` / script_recompile); just save .cs files and Hot Reload patches them.",
+		"After editing scripts, check `unity cmd console get --level error` for [HotReload] errors / \"Unsupported change\" warnings.",
+	];
+	if (p.isPlaying)
+		rules.push(
+			"Play mode is active: no new classes/structs/enums (they only apply after exiting Play mode); method/field edits are fine. Awake/Start won't re-run, so use lazy init.",
+			"Play mode: script eval can't see members added by Hot Reload; scene/component changes are temporary (offer to re-apply in edit mode).",
+		);
+	else rules.push("Edit mode: scene/component changes persist only after saving the scene (scene_save).");
+	return rules;
 }
 
 interface OutputChunk {
@@ -38,14 +61,86 @@ interface OutputChunk {
 	text: string;
 }
 
-function formatPrompt(p: PromptPayload): string {
+/** Map of class/struct name -> .cs files (relative to cwd) that declare it, scanned from Assets/. */
+function indexScripts(cwd: string): Map<string, string[]> {
+	const index = new Map<string, string[]>();
+	const walk = (dir: string) => {
+		let items: fs.Dirent[];
+		try {
+			items = fs.readdirSync(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const it of items) {
+			const p = path.join(dir, it.name);
+			if (it.isDirectory()) walk(p);
+			else if (it.name.endsWith(".cs")) {
+				let src: string;
+				try {
+					src = fs.readFileSync(p, "utf8");
+				} catch {
+					continue;
+				}
+				src = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+				const rel = path.relative(cwd, p);
+				for (const m of src.matchAll(/\b(?:class|struct)\s+(\w+)/g)) {
+					const list = index.get(m[1]) ?? [];
+					if (!list.includes(rel)) list.push(rel);
+					index.set(m[1], list);
+				}
+			}
+		}
+	};
+	walk(path.join(cwd, "Assets"));
+	return index;
+}
+
+/** "Type -> path" lines for the project scripts behind the selected/clicked components. */
+function scriptPaths(p: PromptPayload, cwd: string): string[] {
+	const types: string[] = [];
+	const add = (t: string) => {
+		const name = t.trim().split(".").pop()!;
+		if (/^\w+$/.test(name) && !types.includes(name)) types.push(name);
+	};
+	for (const s of p.selectedComponents ?? []) add(s.replace(/ on '.*'$/s, ""));
+	for (const c of p.components ?? []) add(c);
+	if (!types.length) return [];
+	const index = indexScripts(cwd);
+	const out: string[] = [];
+	for (const t of types) {
+		const files = index.get(t);
+		if (!files?.length) continue; // built-in Unity component or missing script
+		// Prefer the file named after the type (Unity requires it for MonoBehaviours).
+		files.sort((a, b) => Number(path.basename(b, ".cs") === t) - Number(path.basename(a, ".cs") === t));
+		out.push(`${t} -> ${files.join(", ")}`);
+	}
+	return out;
+}
+
+function formatPrompt(p: PromptPayload, cwd = process.cwd()): string {
 	const lines = [`[Unity] ${p.prompt!.trim()}`];
 	const ctx: string[] = [];
 	if (p.scene) ctx.push(`Scene: ${p.scene}`);
 	if (p.target) ctx.push(`Clicked GameObject: ${p.targetPath || p.target}`);
 	if (p.components?.length) ctx.push(`Its components: ${p.components.join(", ")}`);
-	if (p.selectedComponents?.length) ctx.push(`Selected components: ${p.selectedComponents.join(", ")}`);
+	if (typeof p.isPlaying === "boolean") {
+		const state = p.isPlaying ? "Play mode" : "Edit mode";
+		const extras: string[] = [];
+		if (p.editorPaused) extras.push("editor paused");
+		if (p.gamePaused) extras.push("game paused via in-game pause menu");
+		ctx.push(`Editor state: ${state}${extras.length ? ` (${extras.join(", ")})` : ""}`);
+	}
+	if (p.selectedComponents?.length) {
+		ctx.push(`Selected components: ${p.selectedComponents.join(", ")}`);
+		p.selectedComponents.forEach((c, i) => {
+			const fields = p.selectedComponentFields?.[i];
+			if (fields) ctx.push(`Current fields of ${c}: ${fields}`);
+		});
+	}
+	const scripts = scriptPaths(p, cwd);
+	if (scripts.length) ctx.push(`Script files: ${scripts.join("; ")}`);
 	if (ctx.length) lines.push("", "Context from the Unity Editor:", ...ctx.map((c) => `- ${c}`));
+	lines.push("", "Rules for this project:", ...rulesFor(p).map((r) => `- ${r}`));
 	return lines.join("\n");
 }
 
@@ -141,7 +236,7 @@ export default function (pi: ExtensionAPI) {
 			}
 			if (!payload.prompt?.trim()) return reply(res, 400, { ok: false, error: "empty prompt" });
 
-			const text = formatPrompt(payload);
+			const text = formatPrompt(payload, ctxRef?.cwd);
 			const startSeq = seq; // Unity reads output from here on
 			try {
 				// When pi is busy, queue it until the current run finishes.
