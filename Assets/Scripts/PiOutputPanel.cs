@@ -26,7 +26,7 @@ public class PiOutputPanel : MonoBehaviour
 
     public float cornerRadius = 18f;
     [Range(2f, 10f)] public float squircleExponent = 4.5f;
-    public int fontSize = 14;
+    public int fontSize = 28;
 
     [Tooltip("Oldest output is dropped once the text exceeds this many characters (IMGUI limit).")]
     public int maxChars = 12000;
@@ -47,7 +47,7 @@ public class PiOutputPanel : MonoBehaviour
 
     [Header("Follow-up Box")]
     public string followUpPlaceholder = "Ask a follow-up...";
-    public float followUpHeight = 44f;
+    public float followUpHeight = 64f;
 
     /// <summary>Payload JSON of the last prompt sent from MouseHandler; follow-ups reuse its editor context.</summary>
     [HideInInspector] public string contextJson;

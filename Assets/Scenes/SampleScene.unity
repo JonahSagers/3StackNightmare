@@ -911,7 +911,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MouseHandler
   hovered: {fileID: 0}
-  cam: {fileID: 330585545}
+  cam: {fileID: 0}
   hoverMask:
     serializedVersion: 2
     m_Bits: 55
@@ -926,12 +926,12 @@ MonoBehaviour:
       m_Calls: []
   logSelection: 1
   layout: 0
-  segmentWidth: 170
-  segmentHeight: 40
+  segmentWidth: 300
+  segmentHeight: 60
   cornerRadius: 18
   squircleExponent: 4.5
   cursorOffset: {x: 12, y: 12}
-  fontSize: 15
+  fontSize: 20
   backgroundColor: {r: 0.11, g: 0.11, b: 0.13, a: 0.96}
   hoverColor: {r: 0.22, g: 0.47, b: 0.96, a: 1}
   pressedColor: {r: 0.16, g: 0.36, b: 0.8, a: 1}
