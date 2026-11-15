@@ -374,6 +374,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		ctxRef = ctx;
 		if (server) return;
+		if (process.env.PI_REGRESSION_REVIEWER) return; // the regression reviewer is a second pi process: leave the port to the main session
 
 		server = http.createServer((req, res) => {
 			const url = new URL(req.url ?? "/", `http://${HOST}`);

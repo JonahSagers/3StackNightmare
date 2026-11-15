@@ -30,6 +30,11 @@ public class SkillshotProjectile : MonoBehaviour
         if (travelled >= range) Destroy(gameObject);
     }
 
+    // The team rule for skillshots, kept in one place so the regression checks can test it.
+    public static bool Affects(SkillEffect effect, Team team) =>
+        (effect == SkillEffect.Damage && team == Team.Enemy) ||
+        (effect == SkillEffect.Heal && team == Team.Ally);
+
     void OnTriggerEnter(Collider other)
     {
         if (owner != null && other.transform.IsChildOf(owner.transform)) return; // don't hit yourself
@@ -40,9 +45,9 @@ public class SkillshotProjectile : MonoBehaviour
         if (health != null)
         {
             // Damage only hurts enemies, heals only help allies. Wrong team? Fly straight through.
-            if (effect == SkillEffect.Damage && health.team == Team.Enemy) health.TakeDamage(amount);
-            else if (effect == SkillEffect.Heal && health.team == Team.Ally) health.Heal(amount);
-            else return;
+            if (!Affects(effect, health.team)) return;
+            if (effect == SkillEffect.Damage) health.TakeDamage(amount);
+            else health.Heal(amount);
         }
 
         Debug.Log($"{name} hit {other.name}");

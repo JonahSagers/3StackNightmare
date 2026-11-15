@@ -46,23 +46,32 @@ public class Health : MonoBehaviour
     Vector3 spawnPosition;
     Quaternion spawnRotation;
 
-    void Awake()
+    void Awake() => ResetToStart();
+
+    // Back to Starting Health with no shield, remembering this spot as the respawn point.
+    // Called when the game starts; the regression checks call it to set up a fresh character.
+    public void ResetToStart()
     {
         Current = Mathf.Clamp(startingHealth, 0f, maxHealth);
+        ClearShield();
         spawnPosition = transform.position;   // remember where we started
         spawnRotation = transform.rotation;
     }
 
-    void Update()
+    void Update() => Tick(Time.time, Time.deltaTime);
+
+    // One frame of timed behavior (shield expiry + ally decay). Takes the time as parameters
+    // so the regression checks can simulate seconds passing without running the game.
+    public void Tick(float now, float deltaTime)
     {
-        if (Shield > 0f && Time.time >= shieldExpireTime) ClearShield();
+        if (Shield > 0f && now >= shieldExpireTime) ClearShield();
 
         if (team != Team.Ally || !decayToStartingHealth || IsDead) return; // only friendlies decay
         if (Current <= startingHealth) return;                 // nothing to drain
-        if (Time.time - lastHealTime < decayDelaySeconds) return;     // still in the pause after a heal
+        if (now - lastHealTime < decayDelaySeconds) return;    // still in the pause after a heal
 
         // Slide smoothly toward Starting Health, a little each frame.
-        Current = Mathf.MoveTowards(Current, startingHealth, decayPerSecond * Time.deltaTime);
+        Current = Mathf.MoveTowards(Current, startingHealth, decayPerSecond * deltaTime);
     }
 
     public void TakeDamage(float amount)
