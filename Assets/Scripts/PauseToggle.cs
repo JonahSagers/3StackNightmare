@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Space toggles Time.timeScale between 0 and 1. While paused, a thin white
 /// border creeps in from the screen edges and objects tagged "Background" are
-/// slightly desaturated. Spawns itself automatically on scene load.
+/// slightly desaturated and darkened so foreground objects stand out. Spawns itself automatically on scene load.
 /// </summary>
 public class PauseToggle : MonoBehaviour
 {
@@ -18,13 +18,15 @@ public class PauseToggle : MonoBehaviour
     [Header("Background Desaturation")]
     public string backgroundTag = "Background";
     [Tooltip("How much saturation to remove from Background objects when paused (0 = none, 1 = grayscale).")]
-    [Range(0f, 1f)] public float backgroundDesaturation = 0.35f;
+    [Range(0f, 1f)] public float backgroundDesaturation = 0.15f;
+    [Tooltip("How much brightness to remove from Background objects when paused (0 = none, 1 = black).")]
+    [Range(0f, 1f)] public float backgroundDarkening = 0.35f;
 
     public bool IsPaused { get; private set; }
 
     float alpha;
 
-    class DesatTexture { public RenderTexture rt; public float amount = -1f; }
+    class DesatTexture { public RenderTexture rt; public float amount = -1f; public float brightness = -1f; }
     static readonly string[] TexProps = { "_BaseMap", "_MainTex" };
     static readonly string[] ColorProps = { "_BaseColor", "_Color" };
     readonly Dictionary<Texture, DesatTexture> desatTextures = new Dictionary<Texture, DesatTexture>();
@@ -55,7 +57,7 @@ public class PauseToggle : MonoBehaviour
         float step = fadeDuration > 0f ? Time.unscaledDeltaTime / fadeDuration : 1f;
         alpha = Mathf.MoveTowards(alpha, target, step);
 
-        ApplyBackgroundDesaturation(Ease(alpha) * backgroundDesaturation);
+        ApplyBackgroundDesaturation(Ease(alpha));
     }
 
     static float Ease(float x) => 1f - (1f - x) * (1f - x);
@@ -71,12 +73,15 @@ public class PauseToggle : MonoBehaviour
             bgRenderers.AddRange(go.GetComponentsInChildren<Renderer>(true));
     }
 
-    void ApplyBackgroundDesaturation(float amount)
+    /// <param name="t">Eased pause progress, 0..1.</param>
+    void ApplyBackgroundDesaturation(float t)
     {
-        if (Mathf.Approximately(amount, appliedDesat)) return;
-        appliedDesat = amount;
+        if (Mathf.Approximately(t, appliedDesat)) return;
+        appliedDesat = t;
 
-        if (amount <= 0f) { ClearBackgroundOverrides(); return; }
+        float amount = t * backgroundDesaturation;
+        float brightness = 1f - t * backgroundDarkening;
+        if (t <= 0f || (amount <= 0f && brightness >= 1f)) { ClearBackgroundOverrides(); return; }
 
         if (desatMat == null)
         {
@@ -96,25 +101,32 @@ public class PauseToggle : MonoBehaviour
                 if (m == null) continue;
                 mpb.Clear();
 
+                // Darken via the tint color when the material has one (cheap, no re-blit);
+                // otherwise bake the darkening into the desaturated texture.
+                bool hasColor = false;
+                foreach (var p in ColorProps) if (m.HasProperty(p)) { hasColor = true; break; }
+                float texBrightness = hasColor ? 1f : brightness;
+
                 foreach (var p in TexProps)
                 {
                     if (!m.HasProperty(p)) continue;
                     var tex = m.GetTexture(p) as Texture2D;
-                    if (tex != null) mpb.SetTexture(p, GetDesaturated(tex, amount));
+                    if (tex != null) mpb.SetTexture(p, GetDesaturated(tex, amount, texBrightness));
                 }
                 foreach (var p in ColorProps)
                 {
                     if (!m.HasProperty(p)) continue;
                     Color c = m.GetColor(p);
                     float lum = c.r * 0.2126f + c.g * 0.7152f + c.b * 0.0722f;
-                    mpb.SetColor(p, Color.Lerp(c, new Color(lum, lum, lum, c.a), amount));
+                    Color d = Color.Lerp(c, new Color(lum, lum, lum, c.a), amount);
+                    mpb.SetColor(p, new Color(d.r * brightness, d.g * brightness, d.b * brightness, c.a));
                 }
                 r.SetPropertyBlock(mpb, i);
             }
         }
     }
 
-    RenderTexture GetDesaturated(Texture2D src, float amount)
+    RenderTexture GetDesaturated(Texture2D src, float amount, float brightness)
     {
         if (!desatTextures.TryGetValue(src, out var d))
         {
@@ -130,11 +142,13 @@ public class PauseToggle : MonoBehaviour
             d = new DesatTexture { rt = rt };
             desatTextures[src] = d;
         }
-        if (!Mathf.Approximately(d.amount, amount))
+        if (!Mathf.Approximately(d.amount, amount) || !Mathf.Approximately(d.brightness, brightness))
         {
             desatMat.SetFloat("_Amount", amount);
+            desatMat.SetFloat("_Brightness", brightness);
             Graphics.Blit(src, d.rt, desatMat);
             d.amount = amount;
+            d.brightness = brightness;
         }
         return d.rt;
     }
