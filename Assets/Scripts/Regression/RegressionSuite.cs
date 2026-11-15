@@ -39,12 +39,15 @@ public static class RegressionSuite
     public static bool IsRunning { get; private set; }
     public static int Done { get; private set; }
     public static int Total => Checks.Count;
+    static bool loggedStepError;
 
     /// <summary>Called when a run finishes (the editor uses it to run the balance check right after).</summary>
     public static event Action Finished;
 
-    static List<Check> checks;
-    static List<Check> Checks => checks ??= Build();
+    // Built fresh every time instead of cached: Hot Reload keeps old static data alive between code
+    // patches, and a stale cached list is what made runs crash and hang.
+    static List<Check> Checks => Build();
+    static List<Check> runChecks = new List<Check>(); // the checks of the run in progress
 
     static int index;
     static bool executeNext;
@@ -62,7 +65,7 @@ public static class RegressionSuite
     /// <summary>Runs one check right away. Returns null if it passed, otherwise the failure message.</summary>
     public static string Run(string name)
     {
-        foreach (Check c in Checks)
+        foreach (Check c in Build())
             if (c.name == name) return Execute(c);
         return $"No check named {name}";
     }
@@ -71,8 +74,9 @@ public static class RegressionSuite
 
     public static void StartRun()
     {
+        runChecks = Build();
         Results.Clear();
-        foreach (Check c in Checks) Results.Add(new Result { name = c.name, state = State.Pending });
+        foreach (Check c in runChecks) Results.Add(new Result { name = c.name, state = State.Pending });
         index = 0;
         Done = 0;
         executeNext = false;
@@ -86,8 +90,19 @@ public static class RegressionSuite
     public static void Step(double now)
     {
         if (!IsRunning || now < nextStepTime) return;
+        try { StepRun(now); }
+        catch (Exception e)
+        {
+            // Never get stuck: report it once and end the run, instead of throwing every frame.
+            if (!loggedStepError) Debug.LogError($"Regression checks stopped unexpectedly: {e.Message}");
+            loggedStepError = true;
+            FinishRun();
+        }
+    }
 
-        if (index >= Checks.Count)
+    static void StepRun(double now)
+    {
+        if (runChecks == null || index >= runChecks.Count || index >= Results.Count)
         {
             FinishRun();
             return;
@@ -104,7 +119,7 @@ public static class RegressionSuite
         else
         {
             // Phase 2: run it and record the result.
-            r.message = Execute(Checks[index]);
+            r.message = Execute(runChecks[index]);
             r.state = r.message == null ? State.Passed : State.Failed;
             Done++;
             index++;
@@ -118,19 +133,20 @@ public static class RegressionSuite
     public static void RunAllNow()
     {
         StartRun();
-        for (int i = 0; i < Checks.Count; i++)
+        for (int i = 0; i < runChecks.Count; i++)
         {
-            Results[i].message = Execute(Checks[i]);
+            Results[i].message = Execute(runChecks[i]);
             Results[i].state = Results[i].message == null ? State.Passed : State.Failed;
             Done++;
         }
-        index = Checks.Count;
+        index = runChecks.Count;
         FinishRun();
     }
 
     static void FinishRun()
     {
         IsRunning = false;
+        loggedStepError = false;
         int passed = 0, failed = 0;
         foreach (Result r in Results) if (r.state == State.Passed) passed++; else if (r.state == State.Failed) failed++;
 

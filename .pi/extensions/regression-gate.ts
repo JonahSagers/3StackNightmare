@@ -17,7 +17,7 @@
  *
  * Progress goes to Library/RegressionStatus/review.txt (in-game panel + Window > Regression Monitor).
  * The reviewer runs with PI_REGRESSION_REVIEWER=1 (turns this gate off inside it, and keeps the
- * Unity bridge from opening a second server). Override its command with PI_REVIEWER_CMD (default "pi").
+ * Unity bridge from opening a second server). It's launched with the same node + pi script as the running pi; PI_REVIEWER_CMD overrides that.
  */
 
 import { spawn } from "node:child_process";
@@ -73,13 +73,13 @@ function winQuote(arg: string): string {
 	return `"${arg.replace(/[\r\n]+/g, " ").replace(/"/g, "'").replace(/%/g, " percent")}"`;
 }
 
-function runProcess(cmd: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<string> {
+function runProcess(cmd: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, timeoutMs: number, direct = false): Promise<string> {
 	return new Promise((resolve) => {
 		let out = "";
 		let child: ReturnType<typeof spawn>;
 		try {
 			child =
-				process.platform === "win32"
+				process.platform === "win32" && !direct
 					? spawn([cmd, ...args].map(winQuote).join(" "), { cwd, env, shell: true })
 					: spawn(cmd, args, { cwd, env });
 		} catch (err) {
@@ -221,7 +221,13 @@ export default function (pi: ExtensionAPI) {
 		fs.mkdirSync(statusDir(), { recursive: true });
 		fs.writeFileSync(promptFile, prompt);
 		const shortPrompt = `You are the regression reviewer. Read your full instructions in ${path.relative(cwd(), promptFile)} and follow them exactly, including the VERDICT line at the end.`;
-		const output = await runProcess(REVIEWER_CMD, ["-p", shortPrompt], cwd(), env, REVIEW_TIMEOUT_MS);
+		// Start the reviewer exactly the way this pi was started (same node, same pi script), so it works
+		// no matter how pi is installed or which folder `pi` resolves from. PI_REVIEWER_CMD overrides it.
+		const piScript = process.argv[1];
+		const output =
+			!process.env.PI_REVIEWER_CMD && piScript && fs.existsSync(piScript)
+				? await runProcess(process.execPath, [piScript, "-p", shortPrompt], cwd(), env, REVIEW_TIMEOUT_MS, true)
+				: await runProcess(REVIEWER_CMD, ["-p", shortPrompt], cwd(), env, REVIEW_TIMEOUT_MS);
 		try {
 			fs.writeFileSync(statusFile("reviewer-log.txt"), `${new Date().toISOString()}\n\n--- PROMPT ---\n${prompt}\n\n--- OUTPUT ---\n${output}\n`);
 		} catch {
