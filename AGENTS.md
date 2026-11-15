@@ -17,6 +17,12 @@ Unity 6 project (`SampleScene`), new Input System only, URP. Unity is controlled
 
 Script edits must take effect immediately, including during Play mode. Hot Reload patches code when `.cs` files are saved to disk.
 
+### Prioritize changes that apply immediately
+- **If Play mode is active, prefer an implementation that Hot Reload can apply right away** over one that needs exiting Play mode. Add a method or field to an existing class instead of creating a new class, and use lazy init instead of `Awake`/`Start`.
+- **Make the change take effect in the running game too, not just in code.** New serialized fields don't reach existing instances, and `eval` can't set fields added by Hot Reload. So when a feature needs a value on a live object, make the code's default work without setup (e.g. pick a sensible default in the code path), or use a value the running game already has.
+- **Before relying on Hot Reload, check the Console for `[HotReload]` compile errors.** Errors anywhere block all patches. If errors exist, tell the user immediately and explain that nothing will apply until they're fixed or Play mode exits.
+- Only fall back to "applies after exiting Play mode" when there's no reasonable alternative, and say so explicitly.
+
 ### Do
 - **Just save the file.** Writing/editing a `.cs` file is enough; Hot Reload detects the change on disk.
 - **Verify via the Console** (`unity cmd console get`): look for Hot Reload logs and "Unsupported change" warnings. `EditorUtility.scriptCompilationFailed` does not reflect hot patches.
