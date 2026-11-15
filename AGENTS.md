@@ -10,6 +10,8 @@ Unity 6 project (`SampleScene`), new Input System only, URP. Unity is controlled
 - **Screenshots:** `game_view` (works in Play mode and includes overlay UI), `scene_view`, `editor_window`.
 - **Discover commands:** `mcp__unity__list_commands({ query, detail: "compact" })` or `unity cmd <group> --help`. Many MCP tool names have hash suffixes (e.g. `run_c7e8a472` = test run), so check `describeTool` before calling one.
 - **Editor status:** `unity status` (port, state, PID).
+- **Don't use input-simulation commands for testing** (`simulate_key`, `simulate_pointer`, or other keystroke/mouse MCP commands). They drive the user's live game session. Test through `eval` instead (call methods and set state directly), or ask the user to try it in-game.
+- **`eval` can't see Hot Reload changes in Play mode:** it compiles against the assembly loaded when Play mode started, so methods/overloads/fields added by Hot Reload don't exist for it (CS1501 / CS1061 errors). Test new code through existing entry points, or after exiting Play mode.
 
 ## Hot Reload workflow (com.singularitygroup.hotreload)
 
