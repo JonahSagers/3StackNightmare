@@ -156,8 +156,9 @@ public class Lane : MonoBehaviour
         }
 
         // Base pads at each end of the lane (blue = start, red = far end).
-        Pad("BlueBase", new Vector3(0f, 0.03f, -HalfLength + 8f), blueBaseMaterial);
-        Pad("RedBase", new Vector3(0f, 0.03f, HalfLength - 8f), redBaseMaterial);
+        // Blue fountain heals the player back to full; red fountain hurts them.
+        Pad("BlueBase", new Vector3(0f, 0.03f, -HalfLength + 8f), blueBaseMaterial).AddComponent<Fountain>().mode = Fountain.Mode.Heal;
+        Pad("RedBase", new Vector3(0f, 0.03f, HalfLength - 8f), redBaseMaterial).AddComponent<Fountain>().mode = Fountain.Mode.Damage;
     }
 
     void WallBase(Transform parent, float x, float z0, float z1)
@@ -230,7 +231,7 @@ public class Lane : MonoBehaviour
         Block("Rock", parent, pos, size, rot, wallMaterial);
     }
 
-    void Pad(string name, Vector3 pos, Material mat)
+    GameObject Pad(string name, Vector3 pos, Material mat)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         go.name = name;
@@ -239,6 +240,7 @@ public class Lane : MonoBehaviour
         go.transform.localPosition = pos;
         go.transform.localScale = new Vector3(12f, 0.02f, 12f);
         if (mat != null) go.GetComponent<Renderer>().sharedMaterial = mat;
+        return go;
     }
 
     static void Block(string name, Transform parent, Vector3 localPos, Vector3 size, Quaternion rot, Material mat)

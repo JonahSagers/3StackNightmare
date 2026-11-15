@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// Attach to the Player (next to ClickToMove). Right-click an enemy to auto attack it, League-style:
+// Attach to the Player (next to PlayerMove). Right-click an enemy to auto attack it, League-style:
 // if it's out of range the player walks toward it, then fires small homing spheres until the enemy
 // dies or you right-click the ground.
 public class AutoAttack : MonoBehaviour
@@ -18,16 +18,16 @@ public class AutoAttack : MonoBehaviour
     public float projectileSize = 0.2f;
     public Color projectileColor = new Color(1f, 0.85f, 0.4f);
 
-    ClickToMove mover;
+    PlayerMove mover;
     Health target;
     float nextAttackTime;
 
     void Start()
     {
-        mover = GetComponent<ClickToMove>();
+        mover = GetComponent<PlayerMove>();
     }
 
-    // Called by ClickToMove on right-click. Returns true if the click landed on an enemy.
+    // Called by PlayerMove on right-click. Returns true if the click landed on an enemy.
     public bool TryTargetUnderMouse(Ray ray)
     {
         RaycastHit[] hits = Physics.RaycastAll(ray, 500f);

@@ -26,7 +26,7 @@ public class PiOutputPanel : MonoBehaviour
 
     public float cornerRadius = 18f;
     [Range(2f, 10f)] public float squircleExponent = 4.5f;
-    public int fontSize = 14;
+    public int fontSize = 28;
 
     [Tooltip("Oldest output is dropped once the text exceeds this many characters (IMGUI limit).")]
     public int maxChars = 12000;
@@ -45,6 +45,18 @@ public class PiOutputPanel : MonoBehaviour
 
     public bool IsOpen => open;
 
+    [Header("Follow-up Box")]
+    public string followUpPlaceholder = "Ask a follow-up...";
+    public float followUpHeight = 64f;
+
+    /// <summary>Payload JSON of the last prompt sent from MouseHandler; follow-ups reuse its editor context.</summary>
+    [HideInInspector] public string contextJson;
+
+    string followUp = "";
+    const string FollowUpControl = "PiOutputPanel_FollowUp";
+    MouseHandler.SquircleMask followUpMask; // created lazily
+    GUIStyle followUpStyle, followUpPlaceholderStyle;
+
     // ---- JSON shapes returned by the bridge ---------------------------------------
     [System.Serializable] class OutputChunk { public int seq; public string kind; public string text; }
     [System.Serializable] class OutputResponse { public bool ok; public int seq; public bool busy; public OutputChunk[] chunks; }
@@ -56,6 +68,7 @@ public class PiOutputPanel : MonoBehaviour
     {
         public BlockKind kind;
         public bool failed; // tool blocks only
+        public string[] files; // non-null = "files changed" puck: [0] = title, rest = one line per file
         public readonly StringBuilder text = new StringBuilder();
         string cached;
         public string Text => cached ?? (cached = text.ToString());
@@ -133,6 +146,7 @@ public class PiOutputPanel : MonoBehaviour
         if (Instance == this) Instance = null;
         mask.Dispose();
         borderMask.Dispose();
+        followUpMask?.Dispose();
     }
 
     IEnumerator Poll()
@@ -178,11 +192,12 @@ public class PiOutputPanel : MonoBehaviour
                 {
                     case "text": AppendText(c.text); break;
                     case "tool": AddBlock(BlockKind.Tool, c.text); break;
+                    case "files": AddFilesBlock(c.text); break;
                     case "user": AddBlock(BlockKind.Prompt, PromptLine(c.text)); break;
                     case "status": status = c.text; break;
                 }
             }
-            if (r.chunks.Length > 0) TrimToLimit();
+            if (r.chunks.Length > 0) { ExtractFileLists(); TrimToLimit(); }
         }
 
         lastSeq = Mathf.Max(lastSeq, r.seq);
@@ -225,6 +240,128 @@ public class PiOutputPanel : MonoBehaviour
         blocks.Add(b);
     }
 
+    /// <summary>Adds a "files changed" puck. Text = title line, then one line per file.</summary>
+    void AddFilesBlock(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        var b = new Block { kind = BlockKind.Tool, files = text.Trim('\n').Split('\n') };
+        b.text.Append(text);
+        blocks.Add(b);
+    }
+
+    /// <summary>
+    /// Moves a "Files changed:" list written in reply text into a files puck, so it's never shown as plain text.
+    /// Only touches finished text blocks (not the one still streaming).
+    /// </summary>
+    void ExtractFileLists()
+    {
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            Block b = blocks[i];
+            if (b.kind != BlockKind.Text || b.files != null) continue;
+            if (i == blocks.Count - 1 && busy) continue; // still streaming
+
+            string[] lines = b.Text.Split('\n');
+            int header = -1;
+            for (int l = 0; l < lines.Length; l++)
+            {
+                string t = lines[l].Trim().Trim('*', '#', ' ', '_').TrimEnd(':').Trim();
+                if (t.Equals("Files changed", System.StringComparison.OrdinalIgnoreCase)) { header = l; break; }
+            }
+            if (header < 0) continue;
+
+            var files = new List<string> { "Files changed" };
+            int end = header + 1;
+            for (; end < lines.Length; end++)
+            {
+                string t = lines[end].Trim();
+                if (t.Length == 0) { if (files.Count > 1) break; continue; }
+                if (!(t.StartsWith("- ") || t.StartsWith("* ") || t.StartsWith("> "))) break;
+                files.Add(t.Substring(2).Replace("`", "").Replace("**", "").Trim());
+            }
+            if (files.Count < 2) continue;
+
+            // Text before the list stays; text after it (rare) becomes its own block.
+            var before = new StringBuilder();
+            for (int l = 0; l < header; l++) before.Append(lines[l]).Append('\n');
+            var after = new StringBuilder();
+            for (int l = end; l < lines.Length; l++) after.Append(lines[l]).Append('\n');
+
+            string beforeText = before.ToString().TrimEnd();
+            string afterText = after.ToString().Trim();
+            var puck = new Block { kind = BlockKind.Tool, files = files.ToArray() };
+            puck.text.Append(string.Join("\n", files));
+
+            int insert = i;
+            blocks.RemoveAt(i);
+            if (beforeText.Length > 0)
+            {
+                var tb = new Block { kind = BlockKind.Text };
+                tb.text.Append(beforeText);
+                blocks.Insert(insert++, tb);
+            }
+            // Skip if the bridge already added an identical puck right after this text.
+            bool duplicate = insert < blocks.Count && blocks[insert].files != null;
+            if (!duplicate) blocks.Insert(insert++, puck);
+            if (afterText.Length > 0)
+            {
+                var ta = new Block { kind = BlockKind.Text };
+                ta.text.Append(afterText);
+                blocks.Insert(insert++, ta);
+            }
+            i = insert - 1;
+        }
+    }
+
+    GUIStyle fileLineStyle, filesTitleStyle; // created lazily (see EnsureFileStyles)
+    const float FileLineIndent = 26f;
+
+    void EnsureFileStyles()
+    {
+        if (fileLineStyle != null && fileLineStyle.fontSize == toolStyle.fontSize) return;
+        fileLineStyle = new GUIStyle(toolNoWrapStyle) { padding = new RectOffset((int)FileLineIndent, 12, 2, 2), clipping = TextClipping.Clip };
+        fileLineStyle.normal.textColor = textColor;
+        filesTitleStyle = new GUIStyle(toolNoWrapStyle) { padding = new RectOffset(12, 12, 2, 2), fontStyle = FontStyle.Bold };
+        filesTitleStyle.normal.textColor = mutedColor;
+    }
+
+    Rect LayoutFiles(Block b, float contentW, float y)
+    {
+        EnsureFileStyles();
+        float w = filesTitleStyle.CalcSize(new GUIContent(b.files[0])).x;
+        float h = 8f + filesTitleStyle.CalcSize(new GUIContent(b.files[0])).y + 2f;
+        for (int i = 1; i < b.files.Length; i++)
+        {
+            Vector2 s = fileLineStyle.CalcSize(new GUIContent(b.files[i]));
+            w = Mathf.Max(w, s.x);
+            h += s.y;
+        }
+        return new Rect(0f, y, Mathf.Min(contentW, Mathf.Max(160f, w + 4f)), h + 8f);
+    }
+
+    void DrawFiles(Block b, Rect br)
+    {
+        EnsureFileStyles();
+        PiUISprites.DrawRounded(br, 10, surfaceColor);
+        PiUISprites.DrawRounded(new Rect(br.x, br.y + 8f, 3f, br.height - 16f), 1, new Color(accentColor.r, accentColor.g, accentColor.b, 0.8f));
+
+        float y = br.y + 8f;
+        float th = filesTitleStyle.CalcSize(new GUIContent(b.files[0])).y;
+        GUI.Label(new Rect(br.x, y, br.width, th), b.files[0], filesTitleStyle);
+        y += th + 2f;
+
+        for (int i = 1; i < b.files.Length; i++)
+        {
+            string line = b.files[i];
+            float lh = fileLineStyle.CalcSize(new GUIContent(line)).y;
+            bool none = line.StartsWith("No ");
+            Color dot = none ? mutedColor : line.StartsWith("Created") ? successColor : accentColor;
+            PiUISprites.DrawTinted(new Rect(br.x + 13f, y + lh * 0.5f - 3f, 6f, 6f), PiUISprites.Circle(12), dot);
+            GUI.Label(new Rect(br.x, y, br.width, lh), line, fileLineStyle);
+            y += lh;
+        }
+    }
+
     void TrimToLimit()
     {
         int total = 0;
@@ -245,8 +382,9 @@ public class PiOutputPanel : MonoBehaviour
 
     Rect PanelRect()
     {
-        float w = Screen.width * widthFraction;
-        return new Rect(margin, margin, Mathf.Max(120f, w - margin * 1.5f), Screen.height - margin * 2f);
+        // Reference-pixel space (see PiUISprites.GuiScale), so the panel is the same share of the screen at any resolution.
+        float w = PiUISprites.GuiWidth * widthFraction;
+        return new Rect(margin, margin, Mathf.Max(120f, w - margin * 1.5f), PiUISprites.GuiHeight - margin * 2f);
     }
 
     const float Pad = 16f;
@@ -258,6 +396,8 @@ public class PiOutputPanel : MonoBehaviour
         if (!open) return;
         EnsureStyles();
 
+        Matrix4x4 prevMatrix = GUI.matrix;
+        GUI.matrix = PiUISprites.GuiMatrix;
         Rect r = PanelRect();
         Color prev = GUI.color;
 
@@ -272,23 +412,29 @@ public class PiOutputPanel : MonoBehaviour
         if (DrawHeader(new Rect(r.x + Pad, r.y + 12f, r.width - Pad * 2f, HeaderH - 16f)))
         {
             GUI.color = prev;
+            GUI.matrix = prevMatrix;
             return; // closed
         }
 
         // Hairline under the header.
         PiUISprites.DrawTinted(new Rect(r.x + Pad, r.y + HeaderH, r.width - Pad * 2f, 1f), Texture2D.whiteTexture, borderColor);
 
-        Rect body = new Rect(r.x + Pad - 4f, r.y + HeaderH + 10f, r.width - Pad * 2f + 8f, r.height - HeaderH - 10f - Pad * 0.5f);
+        // Follow-up box pinned to the bottom; the output body fills the space above it.
+        Rect input = new Rect(r.x + Pad * 0.75f, r.yMax - Pad * 0.75f - followUpHeight, r.width - Pad * 1.5f, followUpHeight);
+        float bodyTop = r.y + HeaderH + 10f;
+        Rect body = new Rect(r.x + Pad - 4f, bodyTop, r.width - Pad * 2f + 8f, Mathf.Max(0f, input.y - 10f - bodyTop));
         DrawBody(body);
+        DrawFollowUp(input);
 
         GUI.color = prev;
+        GUI.matrix = prevMatrix;
     }
 
     /// <summary>Badge, status pill, close button. Returns true if the panel was closed.</summary>
     bool DrawHeader(Rect h)
     {
         // Brand badge.
-        Rect badge = new Rect(h.x, h.center.y - 14f, 28f, 28f);
+        Rect badge = new Rect(h.x, h.center.y - 14f, 40f, 28f);
         PiUISprites.DrawRounded(badge, 8, accentColor);
         GUI.Label(badge, "pi", titleStyle);
 
@@ -365,6 +511,7 @@ public class PiOutputPanel : MonoBehaviour
 
     Rect LayoutBlock(Block b, float contentW, float y)
     {
+        if (b.files != null) return LayoutFiles(b, contentW, y);
         var content = new GUIContent(b.Text);
         switch (b.kind)
         {
@@ -389,6 +536,7 @@ public class PiOutputPanel : MonoBehaviour
 
     void DrawBlock(Block b, Rect br)
     {
+        if (b.files != null) { DrawFiles(b, br); return; }
         switch (b.kind)
         {
             case BlockKind.Prompt:
@@ -410,6 +558,99 @@ public class PiOutputPanel : MonoBehaviour
                 GUI.Label(br, b.Text, textStyle);
                 break;
         }
+    }
+
+    void DrawFollowUp(Rect rect)
+    {
+        EnsureFollowUpStyles();
+        Event e = Event.current;
+        bool focused = GUI.GetNameOfFocusedControl() == FollowUpControl;
+        if (focused) PiUISprites.MarkTyping(); // blocks game hotkeys while typing here
+
+        // Background + focus ring.
+        if (followUpMask == null) followUpMask = new MouseHandler.SquircleMask();
+        float radius = Mathf.Min(cornerRadius - 4f, rect.height * 0.5f);
+        followUpMask.Ensure(rect.size, radius, squircleExponent);
+        Color ring = focused ? new Color(accentColor.r, accentColor.g, accentColor.b, 0.55f) : borderColor;
+        PiUISprites.DrawTinted(new Rect(rect.x - 1f, rect.y - 1f, rect.width + 2f, rect.height + 2f), followUpMask.Texture, ring);
+        PiUISprites.DrawTinted(rect, followUpMask.Texture, new Color(0.11f, 0.115f, 0.135f, 1f));
+
+        // Send button on the right.
+        Rect send = new Rect(rect.xMax - rect.height + 6f, rect.y + 6f, rect.height - 12f, rect.height - 12f);
+        bool canSend = !string.IsNullOrWhiteSpace(followUp);
+        bool sendHover = canSend && send.Contains(e.mousePosition);
+        Color sendBg = canSend ? (sendHover ? Color.Lerp(accentColor, Color.white, 0.15f) : accentColor) : surfaceColor;
+        PiUISprites.DrawTinted(send, PiUISprites.Circle(64), sendBg);
+        Matrix4x4 prevMatrix = GUI.matrix;
+        GUIUtility.RotateAroundPivot(-90f, send.center); // chevron points up = "send"
+        PiUISprites.DrawTinted(new Rect(send.center.x - 6f, send.center.y - 6f, 12f, 12f), PiUISprites.IconChevron(24),
+                               canSend ? Color.white : mutedColor);
+        GUI.matrix = prevMatrix;
+
+        bool submit = false;
+        if (canSend && GUI.Button(send, GUIContent.none, GUIStyle.none)) submit = true;
+
+        // Enter sends, Escape unfocuses. Handle before the TextField so it can't swallow the key.
+        if (focused && e.type == EventType.KeyDown)
+        {
+            if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter) { submit = canSend; e.Use(); }
+            else if (e.keyCode == KeyCode.Escape) { GUIUtility.keyboardControl = 0; e.Use(); }
+            else if (e.character == '\n' || e.character == '\r') e.Use();
+        }
+
+        // Clicking anywhere outside the box drops focus so game hotkeys (Space to unpause) work again.
+        if (focused && e.type == EventType.MouseDown && !rect.Contains(e.mousePosition))
+            GUIUtility.keyboardControl = 0;
+
+        Rect field = new Rect(rect.x, rect.y, rect.width - rect.height + 4f, rect.height);
+        Color prevCursor = GUI.skin.settings.cursorColor;
+        GUI.skin.settings.cursorColor = textColor;
+        GUI.SetNextControlName(FollowUpControl);
+        followUp = GUI.TextField(field, followUp ?? "", followUpStyle);
+        GUI.skin.settings.cursorColor = prevCursor;
+
+        if (string.IsNullOrEmpty(followUp))
+            GUI.Label(field, followUpPlaceholder, followUpPlaceholderStyle);
+
+        if (submit) SubmitFollowUp();
+    }
+
+    void SubmitFollowUp()
+    {
+        string text = followUp?.Trim();
+        if (string.IsNullOrEmpty(text)) return;
+        var sender = GetComponent<MouseHandler>();
+        if (sender == null) sender = FindAnyObjectByType<MouseHandler>();
+        if (sender == null) { status = "no MouseHandler to send with"; return; }
+        sender.SendFollowUp(text, contextJson);
+        followUp = "";
+        status = "sending...";
+        busy = true;
+        stickToBottom = true;
+    }
+
+    void EnsureFollowUpStyles()
+    {
+        if (followUpStyle != null && followUpStyle.fontSize == fontSize) return;
+        followUpStyle = new GUIStyle(GUI.skin.textField)
+        {
+            alignment = TextAnchor.MiddleLeft,
+            fontSize = fontSize,
+            wordWrap = false,
+            clipping = TextClipping.Clip,
+            padding = new RectOffset(14, 8, 0, 0),
+            border = new RectOffset(0, 0, 0, 0),
+            margin = new RectOffset(0, 0, 0, 0),
+        };
+        foreach (GUIStyleState s in new[] { followUpStyle.normal, followUpStyle.hover, followUpStyle.active, followUpStyle.focused,
+                                             followUpStyle.onNormal, followUpStyle.onHover, followUpStyle.onActive, followUpStyle.onFocused })
+        {
+            s.background = null;
+            s.scaledBackgrounds = null;
+            s.textColor = textColor;
+        }
+        followUpPlaceholderStyle = new GUIStyle(followUpStyle);
+        followUpPlaceholderStyle.normal.textColor = new Color(mutedColor.r, mutedColor.g, mutedColor.b, 0.7f);
     }
 
     void DrawTypingIndicator(Vector2 origin)

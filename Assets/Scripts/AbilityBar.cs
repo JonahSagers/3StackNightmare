@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
-// Screen-space ability bar showing the Q / W / E / R keys at the bottom of the screen.
+// Screen-space ability bar showing the Q / W / E / R keys (plus H, full heal) at the bottom of the screen.
 // - Slot presses in while its key is held.
 // - Flashes gold when the ability actually activates, red when pressed on cooldown.
 // - Shows a radial cooldown sweep with the seconds remaining.
@@ -36,7 +36,10 @@ public class AbilityBar : MonoBehaviour
     }
 
     readonly List<Slot> slots = new List<Slot>();
-    static readonly Key[] order = { Key.Q, Key.W, Key.E, Key.R };
+    static readonly Key[] order = { Key.Q, Key.W, Key.E, Key.R, Key.H };
+
+    [Tooltip("Extra gap before the H (utility) slot, to set it apart from the abilities.")]
+    public float utilityGap = 24f;
     const float FlashDuration = 0.35f;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -61,10 +64,13 @@ public class AbilityBar : MonoBehaviour
 
         foreach (var key in order)
         {
-            slots.Add(BindAbility(key) ?? new Slot { key = key });
+            var bound = BindAbility(key);
+            if (bound == null && key == Key.H) continue; // no full-heal on the player: skip that slot
+            slots.Add(bound ?? new Slot { key = key });
         }
 
-        float total = slots.Count * slotSize + (slots.Count - 1) * spacing;
+        bool hasUtility = slots.Exists(sl => sl.key == Key.H);
+        float total = slots.Count * slotSize + (slots.Count - 1) * spacing + (hasUtility ? utilityGap : 0f);
         for (int i = 0; i < slots.Count; i++)
         {
             var s = slots[i];
@@ -74,7 +80,8 @@ public class AbilityBar : MonoBehaviour
             root.anchorMin = root.anchorMax = new Vector2(0.5f, 0f);
             root.pivot = new Vector2(0.5f, 0f);
             root.sizeDelta = new Vector2(slotSize, slotSize);
-            root.anchoredPosition = new Vector2(-total / 2f + slotSize / 2f + i * (slotSize + spacing), bottomMargin);
+            float extra = s.key == Key.H ? utilityGap : 0f;
+            root.anchoredPosition = new Vector2(-total / 2f + slotSize / 2f + i * (slotSize + spacing) + extra, bottomMargin);
             s.root = root;
 
             s.border = MakeImage("Border", root, sprite, borderColor, 0f);
@@ -111,6 +118,8 @@ public class AbilityBar : MonoBehaviour
             if (a.key == key) { var c = a; return new Slot { key = key, nextReady = () => c ? c.NextReadyTime : 0f, cooldown = () => c ? c.cooldown : 1f }; }
         foreach (var a in FindObjectsByType<ShieldAbility>())
             if (a.key == key) { var c = a; return new Slot { key = key, nextReady = () => c ? c.NextReadyTime : 0f, cooldown = () => c ? c.cooldown : 1f }; }
+        foreach (var a in FindObjectsByType<FullHealKey>())
+            if (a.key == key) { var c = a; return new Slot { key = key, nextReady = () => c ? c.NextReadyTime : 0f, cooldown = () => c ? c.cooldown : 1f }; }
         return null;
     }
 
@@ -122,6 +131,8 @@ public class AbilityBar : MonoBehaviour
             if (a.key == key) return "Leap";
         foreach (var a in FindObjectsByType<ShieldAbility>())
             if (a.key == key) return "Shield";
+        foreach (var a in FindObjectsByType<FullHealKey>())
+            if (a.key == key) return "Full Heal";
         return "";
     }
 
@@ -133,8 +144,10 @@ public class AbilityBar : MonoBehaviour
         foreach (var s in slots)
         {
             if (s.root == null) continue;
-            bool held = keyboard != null && keyboard[s.key].isPressed;
-            bool pressed = keyboard != null && keyboard[s.key].wasPressedThisFrame;
+            // Keys typed into a text box don't count as ability presses (no press/denied feedback).
+            bool keysLive = keyboard != null && !PiUISprites.IsTyping;
+            bool held = keysLive && keyboard[s.key].isPressed;
+            bool pressed = keysLive && keyboard[s.key].wasPressedThisFrame;
 
             float remaining = 0f, cd = 1f;
             if (s.nextReady != null)
